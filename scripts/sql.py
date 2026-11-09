@@ -198,8 +198,7 @@ SELECT
   IFNULL(pags.n_pdp, 0) AS n_pdp,
   IFNULL(pags.n_plp, 0) AS n_plp,
   secs.entrada,
-  CONCAT(secs.seq6, IF(secs.pasos > 6, ' > …', ''),
-         IF(evs.compras > 0, ' > Compra', ' > Salida')) AS recorrido
+  CONCAT(secs.seq6, IF(secs.pasos > 6, ' > …', '')) AS recorrido
 FROM evs
 LEFT JOIN inicio USING (marca, sk)
 LEFT JOIN pags USING (marca, sk)
@@ -213,6 +212,7 @@ SELECT marca, canal, IFNULL(dev, 'otro') AS dev,
   COUNT(*) AS sesiones, COUNTIF(home) AS s_home, COUNTIF(plp) AS s_plp,
   COUNTIF(pdp) AS s_pdp, COUNTIF(busq) AS s_busq, COUNTIF(carro) AS s_carro,
   COUNTIF(chk) AS s_chk, COUNTIF(compro) AS s_compra,
+  COUNTIF(busq AND compro) AS s_busq_compra,
   SUM(compras) AS compras, ROUND(SUM(ingresos)) AS ingresos
 FROM ses GROUP BY 1, 2, 3;
 
