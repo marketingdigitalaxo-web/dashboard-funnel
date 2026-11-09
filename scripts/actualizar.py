@@ -169,6 +169,35 @@ def modo_prueba():
         print("  ", r)
 
 
+
+
+def modo_diag():
+    """Revisa las compras por marca: eventos, transacciones distintas y sin ID."""
+    client = bq.cliente()
+    partes = []
+    for m, p in sql.PROPIEDADES.items():
+        for dia in ("20261103", "20261108"):
+            partes.append(f"""SELECT '{m}' AS marca, '{dia}' AS dia, COUNT(*) AS eventos,
+  COUNT(DISTINCT ecommerce.transaction_id) AS tid_distintos,
+  COUNTIF(ecommerce.transaction_id IS NULL OR ecommerce.transaction_id = '(not set)') AS sin_tid,
+  ROUND(SUM(ecommerce.purchase_revenue)) AS ingresos,
+  ROUND(SUM(IF(ROW_NUMBER_DUMMY, 0, 0))) AS x
+FROM `{sql.PROJECT}.analytics_{p}.events_intraday_{dia}` WHERE event_name = 'purchase'""".replace(",\n  ROUND(SUM(IF(ROW_NUMBER_DUMMY, 0, 0))) AS x", ""))
+    q = "\nUNION ALL\n".join(partes) + "\nORDER BY marca, dia"
+    tabla, gb = bq.correr_consulta(client, q, max_gb=3)
+    print(f"Diagnóstico de compras ({gb:.2f} GB): {tabla['cols']}")
+    for r in tabla["rows"]:
+        print("  ", r)
+    q2 = f"""SELECT ecommerce.transaction_id AS tid, COUNT(*) AS veces, ROUND(SUM(ecommerce.purchase_revenue)) AS ingresos,
+  MIN(TIMESTAMP_MICROS(event_timestamp)) AS primero, MAX(TIMESTAMP_MICROS(event_timestamp)) AS ultimo
+FROM `{sql.PROJECT}.analytics_252082503.events_intraday_20261108` WHERE event_name = 'purchase'
+GROUP BY 1 ORDER BY veces DESC LIMIT 10"""
+    tabla, gb = bq.correr_consulta(client, q2, max_gb=1)
+    print(f"\nVS 08-11, transacciones más repetidas ({gb:.2f} GB):")
+    for r in tabla["rows"]:
+        print("  ", r)
+
+
 if __name__ == "__main__":
     modo = sys.argv[1] if len(sys.argv) > 1 else "normal"
-    {"prueba": modo_prueba, "normal": modo_normal}[modo]()
+    {"prueba": modo_prueba, "normal": modo_normal, "diag": modo_diag}[modo]()
