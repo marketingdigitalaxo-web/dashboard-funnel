@@ -1,0 +1,81 @@
+name: Actualizar dashboard
+
+on:
+  # PAUSADO hasta validar las cifras: descomentar las 2 líneas de schedule
+  # para activar la corrida automática cada hora (minuto 17; los cron en
+  # punto son los que más se atrasan). El script decide qué hacer: "Hoy"
+  # siempre; el diario una vez al día desde las 7:00 hora Chile; y completa
+  # el historial si faltan días.
+  # schedule:
+  #   - cron: '17 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Evita que dos corridas se pisen al guardar los datos.
+concurrency:
+  group: actualizar-dashboard
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Hora en Chile
+        run: echo "Hora actual en Chile: $(TZ=America/Santiago date '+%Y-%m-%d %H:%M')"
+
+      - uses: actions/checkout@v4
+
+      - name: Traer datos guardados (rama "datos")
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          if git ls-remote --exit-code --heads "$URL" datos >/dev/null; then
+            git clone --quiet --depth 1 --branch datos "$URL" store
+            rm -rf store/.git
+          else
+            echo "Primera corrida: todavía no hay datos guardados."
+            mkdir -p store
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+
+      - name: Consultar BigQuery
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/actualizar.py normal
+
+      - name: Guardar datos (rama "datos", un solo commit, sin historial)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd store
+          git init --quiet -b datos
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Datos al $(TZ=America/Santiago date '+%Y-%m-%d %H:%M') Chile"
+          git push --quiet --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" datos
+
+      - name: Armar sitio
+        run: |
+          mkdir -p site
+          cp -r web/. site/
+          python scripts/construir.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
