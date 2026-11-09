@@ -102,7 +102,7 @@ def script_diario(dia, marcas=None):
 
     sql = f"""
 -- 1) eventos relevantes del día, con la ruta de la URL limpia
-CREATE TEMP TABLE ev AS
+CREATE TEMP TABLE eventos AS
 SELECT
   * EXCEPT (loc),
   NET.HOST(loc) AS host,
@@ -125,7 +125,7 @@ SELECT
     WHEN STARTS_WITH(path, '/customer') OR STARTS_WITH(path, '/sales') THEN 'Cuenta'
     ELSE 'Otra'
   END AS tipo
-FROM ev
+FROM eventos
 WHERE path IS NOT NULL
 GROUP BY marca, sk, path;
 
@@ -138,7 +138,7 @@ SELECT
   LEAD(e.path) OVER w AS sig_path,
   LEAD(p.tipo) OVER w AS sig_tipo,
   IFNULL(LAG(p.tipo) OVER w, '') != p.tipo AS cambia_tipo
-FROM ev e
+FROM eventos e
 JOIN pg p USING (marca, sk, path)
 WHERE e.ev = 'page_view'
 WINDOW w AS (PARTITION BY e.marca, e.sk ORDER BY e.ts);
@@ -150,7 +150,7 @@ WITH
   inicio AS (
     SELECT marca, sk,
       ARRAY_AGG(STRUCT(src, med, gclid, host) ORDER BY ts LIMIT 1)[OFFSET(0)] AS s
-    FROM ev WHERE ev = 'session_start' GROUP BY marca, sk
+    FROM eventos WHERE ev = 'session_start' GROUP BY marca, sk
   ),
   evs AS (
     SELECT marca, sk,
@@ -160,7 +160,7 @@ WITH
       LOGICAL_OR(ev = 'view_search_results') AS busco,
       COUNT(DISTINCT IF(ev = 'purchase', IFNULL(tid, CAST(ts AS STRING)), NULL)) AS compras,
       IFNULL(SUM(rev), 0) AS ingresos
-    FROM ev GROUP BY marca, sk
+    FROM eventos GROUP BY marca, sk
   ),
   pags AS (
     SELECT marca, sk,
@@ -262,11 +262,11 @@ GROUP BY 1, 2, 3 HAVING n >= 3;
 
 -- busqueda
 WITH b AS (
-  SELECT marca, sk, term, MIN(ts) AS t FROM ev
+  SELECT marca, sk, term, MIN(ts) AS t FROM eventos
   WHERE ev = 'view_search_results' AND term IS NOT NULL AND term != ''
   GROUP BY 1, 2, 3
 ), vi AS (
-  SELECT marca, sk, MAX(ts) AS t_ult FROM ev WHERE ev = 'view_item' GROUP BY 1, 2
+  SELECT marca, sk, MAX(ts) AS t_ult FROM eventos WHERE ev = 'view_item' GROUP BY 1, 2
 )
 SELECT b.marca, b.term, COUNT(*) AS sesiones,
   COUNTIF(vi.t_ult > b.t) AS s_clic_producto,
@@ -280,7 +280,7 @@ SELECT marca, i.item_id, ANY_VALUE(i.item_name) AS nombre,
   SUM(IF(ev = 'add_to_cart', IFNULL(i.quantity, 1), 0)) AS agregados,
   SUM(IF(ev = 'purchase', IFNULL(i.quantity, 1), 0)) AS unidades,
   ROUND(SUM(IF(ev = 'purchase', IFNULL(i.item_revenue, 0), 0))) AS ingresos
-FROM ev, UNNEST(it) AS i
+FROM eventos, UNNEST(it) AS i
 WHERE i.item_id IS NOT NULL
 GROUP BY 1, 2 HAVING vistas >= 3 OR unidades > 0;
 """
