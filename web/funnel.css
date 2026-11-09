@@ -132,3 +132,7 @@ td.path-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
 .kpi-row.compact { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 0; }
 .kpi-row.compact .kpi { box-shadow: none; }
 .kpi .sub2 { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+
+/* Pestañas: en pantallas angostas se desplazan en vez de desbordar */
+nav.tabs { overflow-x: auto; scrollbar-width: thin; }
+nav.tabs button { white-space: nowrap; flex: none; }

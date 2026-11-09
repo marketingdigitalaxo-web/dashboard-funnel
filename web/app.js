@@ -82,6 +82,15 @@ function agruparPor(filas, clave, campos) {
   }
   return [...m].map(([k, fs]) => ({ key: k, ...sumar(fs, campos) }));
 }
+// Referencia "típica" entre marcas: mediana de las tasas por marca (con un
+// mínimo de sesiones). Se usa la mediana y no el promedio ponderado para que
+// una marca muy grande o con medición distinta (ej. VS) no mueva la vara.
+function medianaMarcas(porMarca, num, den, minDen = 200) {
+  const xs = porMarca.filter((f) => f[den] >= minDen).map((f) => f[num] / f[den]).filter(isFinite).sort((a, b) => a - b);
+  if (!xs.length) return NaN;
+  const m = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+}
 function deltaTxt(act, ant, esPct = false) {
   if (ant == null || !isFinite(act) || !isFinite(ant) || ant === 0) return null;
   if (esPct) {
@@ -219,7 +228,7 @@ function renderResumen() {
 
   // Embudo por marca: % de sesiones que llega a cada paso, vs promedio del grupo.
   const porMarca = agruparPor(filasEmbudo(p.desde, p.hasta), 'marca', CAMPOS_EMBUDO);
-  const prom = Object.fromEntries(PASOS.map((s) => [s.k, div(a[s.k], a.sesiones)]));
+  const prom = Object.fromEntries(PASOS.map((s) => [s.k, medianaMarcas(porMarca, s.k, 'sesiones')]));
   const colorear = (k) => (f) => {
     const v = div(f[k], f.sesiones), m = prom[k];
     if (!isFinite(v) || !isFinite(m) || f.sesiones < 200) return '';
@@ -246,7 +255,7 @@ async function renderOportunidades(porMarca, total) {
   PASOS.forEach((s, i) => {
     if (s.k === 's_pdp') return; // muchas sesiones entran directo a PDP: la tasa PLP->PDP engaña
     const prevK = s.k === 's_carro' ? 's_pdp' : pasosPrev[i];
-    const promedio = div(total[s.k], total[prevK]);
+    const promedio = medianaMarcas(porMarca, s.k, prevK, MIN.sesionesPaso);
     for (const f of porMarca) {
       if (f[prevK] < MIN.sesionesPaso) continue;
       const v = div(f[s.k], f[prevK]);
@@ -254,7 +263,7 @@ async function renderOportunidades(porMarca, total) {
         const nombrePrev = prevK === 'sesiones' ? 'las sesiones' : 'las sesiones que llegan a ' + PASOS.find((x) => x.k === prevK).label;
         ops.push({ peso: f[prevK] * (promedio - v), alta: v < promedio * 0.5, tag: 'Embudo',
           t: `${f.key}: solo ${pct(v)} de ${nombrePrev} llega a ${s.label}`,
-          d: `promedio del grupo ${pct(promedio)} · ${fmtInt.format(f[prevK])} sesiones en el paso anterior` });
+          d: `marca típica (mediana) ${pct(promedio)} · ${fmtInt.format(f[prevK])} sesiones en el paso anterior` });
       }
     }
   });
@@ -491,7 +500,8 @@ async function renderPaginas() {
 
   // Espacios para campañas
   const candidatas = filas.filter((r) => r.vistas >= MIN.paginaVistas && !['Carro', 'Checkout', 'Cuenta'].includes(r.tipo));
-  const retener = candidatas.map((r) => ({ r, v: div(r.sig_salida, r.vistas) })).sort((x, y) => y.r.vistas * y.v - x.r.vistas * x.v).slice(0, 7);
+  // Retener: al menos 25% de las vistas termina en salida; ordena por cantidad de salidas.
+  const retener = candidatas.map((r) => ({ r, v: div(r.sig_salida, r.vistas) })).filter((x) => x.v >= 0.25).sort((x, y) => y.r.sig_salida - x.r.sig_salida).slice(0, 7);
   const puente = candidatas.filter((r) => r.tipo !== 'PDP').map((r) => ({ r, v: div(r.sig_pdp + r.sig_carro, r.vistas) })).sort((x, y) => y.r.vistas * y.v - x.r.vistas * x.v).slice(0, 7);
   const lista = (xs, etiqueta) => (xs.length ? `<ul class="mini-list">${xs.map(({ r, v }) => `<li><span class="r" title="${esc(r.path)}">${esc(r.path)} <span class="chip muted">${esc(r.tipo)}</span></span><span class="m">${fmtInt.format(r.vistas)} vistas · ${pct(v, 0)} ${etiqueta}</span></li>`).join('')}</ul>` : '<div class="empty-state">Sin páginas con suficiente tráfico.</div>');
   document.getElementById('espacios-retener').innerHTML = lista(retener, 'se va');
