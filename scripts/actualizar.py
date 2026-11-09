@@ -31,7 +31,7 @@ TZ = ZoneInfo("America/Santiago")
 STORE = os.environ.get("STORE_DIR", "store")
 DIAS_HISTORIAL = int(os.environ.get("DIAS_HISTORIAL", "90"))
 DIAS_REPROCESO = 3
-MAX_DIAS_POR_CORRIDA = int(os.environ.get("MAX_DIAS_POR_CORRIDA", "12"))
+MAX_DIAS_POR_CORRIDA = int(os.environ.get("MAX_DIAS_POR_CORRIDA", "10"))
 HORA_DIARIO = 7
 
 
@@ -147,18 +147,21 @@ def modo_prueba():
     hoy = ahora().date()
     ayer = hoy - timedelta(days=1)
     script, nombres = sql.script_diario(ymd(ayer))
-    print(f"Estimación diario completo ({ayer}): {bq.estimar_gb(client, script):.2f} GB (cota superior, las tablas temporales suman aparte)")
     print(f"Estimación hoy ({hoy}): {bq.estimar_gb(client, sql.consulta_hoy(ymd(hoy))):.2f} GB")
 
-    script, nombres = sql.script_diario(ymd(ayer), ["Andes", "VS"])
     t0 = time.time()
     tablas, gb = bq.correr_script(client, script, nombres)
-    print(f"\nPrueba Andes+VS {ayer}: {gb:.2f} GB facturados, {time.time() - t0:.0f}s")
+    print(f"\nPrueba 17 marcas {ayer}: {gb:.2f} GB facturados, {time.time() - t0:.0f}s")
     for nombre, t in tablas.items():
-        print(f"\n== {nombre}: {len(t['rows'])} filas | {t['cols']}")
-        orden = sorted(t["rows"], key=lambda r: -(r[t["cols"].index("sesiones")] if "sesiones" in t["cols"] else (r[t["cols"].index("vistas")] if "vistas" in t["cols"] else r[-1] or 0)))
-        for r in orden[:8]:
-            print("  ", r)
+        print(f"== {nombre}: {len(t['rows'])} filas")
+    emb = tablas["embudo"]; c = emb["cols"]
+    tot = {}
+    for r in emb["rows"]:
+        m = r[c.index("marca")]; tot.setdefault(m, [0, 0, 0])
+        tot[m][0] += r[c.index("sesiones")]; tot[m][1] += r[c.index("compras")]; tot[m][2] += r[c.index("ingresos")]
+    print("\nTotales por marca (para comparar con GA4): marca, sesiones, compras, ingresos")
+    for m, v in sorted(tot.items()):
+        print("  ", m, v)
 
     tabla, gb = bq.correr_consulta(client, sql.consulta_hoy(ymd(hoy), ["Andes", "VS"]))
     print(f"\n== hoy Andes+VS: {gb:.2f} GB, {len(tabla['rows'])} filas")

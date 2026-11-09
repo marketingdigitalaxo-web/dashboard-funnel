@@ -65,6 +65,8 @@ def correr_script(client, sql, nombres, max_gb=MAX_GB_DIARIO):
     selects = [j for j in hijos if j.statement_type == "SELECT"]
     if len(selects) != len(nombres):
         raise RuntimeError(f"Se esperaban {len(nombres)} resultados y llegaron {len(selects)}")
+    detalle = [(j.statement_type, round((j.total_bytes_billed or 0) / 1e9, 2)) for j in hijos]
+    print("    GB por sentencia:", detalle)
     salida = {}
     for nombre, hijo in zip(nombres, selects):
         res = hijo.result()

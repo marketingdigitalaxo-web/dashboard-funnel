@@ -183,8 +183,8 @@ WITH
   )
 SELECT
   evs.marca, evs.sk, evs.dev,
-  IFNULL(inicio.s.src, '(direct)') AS src,
-  IFNULL(inicio.s.med, '(none)') AS med,
+  IF(inicio.s.gclid IS NOT NULL, 'google', IFNULL(inicio.s.src, '(direct)')) AS src,
+  IF(inicio.s.gclid IS NOT NULL, 'cpc', IFNULL(inicio.s.med, '(none)')) AS med,
   inicio.s.gclid AS gclid,
   inicio.s.host AS host,
   IFNULL(pags.home, FALSE) AS home,
