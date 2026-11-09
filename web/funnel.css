@@ -1,0 +1,134 @@
+/* Estilos propios del dashboard de recorrido. La base (paleta, vidrio,
+   tablas, filtros) viene de style.css, copiada del dashboard de campañas
+   para que ambos se vean como una familia. */
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.grid-2 > .card { margin-bottom: 20px; }
+@media (max-width: 900px) {
+  .grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.filters-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-basis: 100%;
+}
+.filters-note:empty { display: none; }
+
+.table-scroll.tall { max-height: 460px; overflow-y: auto; }
+.card-desc { margin: -4px 0 10px; font-size: 12.5px; color: var(--text-secondary); }
+.legend-note { margin: 10px 0 0; font-size: 12px; color: var(--text-muted); }
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.toolbar select {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2-strong);
+  color: var(--text-primary);
+  min-width: 160px;
+}
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding-bottom: 6px;
+}
+label.check input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+/* Selector segmentado PDP | PLP */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: none;
+}
+.seg button {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+/* Celdas comparadas contra el promedio */
+td.good { background: var(--status-good-bg); color: var(--status-good) !important; }
+td.bad  { background: var(--status-critical-bg); color: var(--status-critical) !important; }
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.chip.good { background: var(--status-good-bg); color: var(--status-good); }
+.chip.bad  { background: var(--status-critical-bg); color: var(--status-critical); }
+.chip.warn { background: var(--status-warning-bg); color: var(--status-warning); }
+.chip.muted { background: var(--surface-2); color: var(--text-secondary); }
+
+/* Oportunidades */
+.opp {
+  border-left: 3px solid var(--status-warning);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+.opp.alta { border-left-color: var(--status-critical); }
+.opp .t { font-size: 13px; color: var(--text-primary); }
+.opp .d { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.opp .tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-right: 6px; }
+
+/* Embudo en barras horizontales (HTML, sin canvas) */
+.fbar { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px; align-items: center; gap: 10px; margin: 8px 0; }
+.fbar .lab { font-size: 13px; color: var(--text-secondary); }
+.fbar .track { height: 18px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.fbar .fill { height: 100%; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.fbar .fill.fin { background: var(--series-3); }
+.fbar .num { font-size: 12.5px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.fbar .num small { color: var(--text-muted); display: block; font-size: 11px; }
+
+/* Barra apilada "hacia dónde va" */
+.next-bar { display: flex; height: 10px; width: 140px; border-radius: 3px; overflow: hidden; gap: 1px; background: var(--surface-2); }
+.next-bar span { display: block; height: 100%; }
+.next-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--text-secondary); margin: 0 0 8px; }
+.next-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+/* Árbol de secciones */
+.tree-toggle {
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  font: inherit; width: 18px; padding: 0; text-align: left;
+}
+.tree-toggle[disabled] { visibility: hidden; }
+.path-link { background: none; border: none; color: var(--text-primary); font: inherit; cursor: pointer; padding: 0; text-align: left; }
+.path-link:hover { color: var(--accent); text-decoration: underline; }
+td.path-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+
+.mini-list { list-style: none; margin: 0; padding: 0; }
+.mini-list li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--gridline); font-size: 13px; }
+.mini-list li:last-child { border-bottom: none; }
+.mini-list .r { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-list .m { color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.kpi-row.compact { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 0; }
+.kpi-row.compact .kpi { box-shadow: none; }
+.kpi .sub2 { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }

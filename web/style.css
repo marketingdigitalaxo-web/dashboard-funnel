@@ -1,0 +1,745 @@
+/* ============================================================
+   Dashboard de Campañas On-Site — estilos
+   Glassmorphism sobre fondo con gradiente cálido (oscuro → naranjo →
+   durazno), inspirado en la referencia "Channel Analytics" + imagen de
+   gradiente adjunta. Paneles de vidrio esmerilado (backdrop-blur) con
+   relleno oscuro semitransparente, para que el texto siga siendo
+   legible sin importar qué tramo del gradiente quede detrás.
+   Paleta y roles de color siguen la convención de la skill dataviz:
+   variables por rol, no valores sueltos en el cuerpo del CSS. La paleta
+   categórica de gráficos fue re-validada con scripts/validate_palette.js
+   contra la superficie de vidrio (#1c1a17) — sigue siendo el set por
+   defecto de la skill, que ya pasaba todos los checks.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+  --page-plane:     #14120f;   /* color sólido de respaldo (texto de tooltip, etc.) */
+  --surface-1:      rgba(26, 22, 19, 0.45);   /* vidrio: tarjetas / paneles */
+  --surface-1-strong: rgba(20, 17, 15, 0.62); /* vidrio más opaco: header sticky, filtros */
+  --surface-2-strong: rgb(45 40 34); /* color plano para listas de filtro */
+  --surface-2:      rgba(255, 255, 255, 0.07); /* elementos anidados: inputs, hover de fila */
+  --text-primary:   #ffffff;
+  --text-secondary: rgba(255,255,255,0.74);
+  --text-muted:     rgba(255,255,255,0.52);
+  --gridline:       rgba(255,255,255,0.12);
+  --baseline:       rgba(255,255,255,0.24);
+  --border:         rgba(255,255,255,0.16);
+  --glass-blur:     20px;
+  --glass-shadow:   0 8px 32px rgba(0,0,0,0.35);
+
+  --accent:         #d95926;   /* naranjo — color de destacar (UI, no serie) */
+  --accent-strong:  #b5481c;
+
+  /* Paleta categórica de gráficos — set por defecto de la skill dataviz,
+     validado contra la superficie de vidrio oscuro de este tema. */
+  --series-1: #3987e5; /* azul    */
+  --series-2: #d95926; /* naranjo (= accent, coherente con el resto de la UI) */
+  --series-3: #199e70; /* aqua    */
+  --series-4: #c98500; /* ámbar   */
+  --series-5: #d55181; /* magenta */
+  --series-other: rgba(255,255,255,0.28); /* "Otros" — gris translúcido, fuera del set categórico */
+
+  --status-good:      #22c55e;
+  --status-warning:   #f5a623;
+  --status-critical:  #ef4444;
+  --status-good-bg:     rgba(34,197,94,0.15);
+  --status-warning-bg:  rgba(245,166,35,0.15);
+  --status-critical-bg: rgba(239,68,68,0.15);
+
+  --seq-100: #241d16;
+  --seq-400: #8a3f1a;
+  --seq-700: #b5481c;
+
+  --radius: 22px;
+  --radius-sm: 12px;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Tema claro opcional (no hay switch en la UI todavía; queda disponible
+   activando data-theme="light" en <html> si más adelante se agrega uno). */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page-plane:     #f9f9f7;
+  --surface-1:      #fcfcfb;
+  --surface-1-strong: #fcfcfb;
+  --surface-2-strong: #f2f1ed;
+  --surface-2:      #f2f1ed;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+  --gridline:       #e1e0d9;
+  --baseline:       #c3c2b7;
+  --border:         rgba(11,11,11,0.10);
+  --glass-blur:     0px;
+  --glass-shadow:   none;
+
+  --accent:         #b5481c;
+  --accent-strong:  #93380f;
+
+  --series-1: #2a78d6;
+  --series-2: #c9581e;
+  --series-3: #1baf7a;
+  --series-4: #b5771a;
+  --series-5: #b03f6e;
+  --series-other: #b8b6ae;
+
+  --status-good: #0ca30c;
+  --status-warning: #c97a00;
+  --status-critical: #d03b3b;
+  --status-good-bg:     rgba(12,163,12,0.12);
+  --status-warning-bg:  rgba(201,122,0,0.12);
+  --status-critical-bg: rgba(208,59,59,0.12);
+
+  --seq-100: #f6e4d3;
+  --seq-400: #d98a4a;
+  --seq-700: #93380f;
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--page-plane); }
+
+/* El degradado se pinta directamente en <body>, dimensionado al 100%
+   del alto REAL de la página (no del viewport) con background-size:
+   100% 100% + min-height: 100vh. Así el degradado siempre llega hasta
+   el final del contenido — ya sea una pantalla corta (min-height la
+   estira a 100vh) o una tabla larga con cientos de filas (el body
+   crece y el degradado crece con él) — sin dejar nunca un bloque
+   sólido al final. (Antes se probó con un fondo `fixed` anclado al
+   viewport, pero eso hace que el degradado se vea "congelado" y deja
+   de cubrir el resto de la página en pantallas largas — por eso se
+   cambió a este enfoque.) */
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--page-plane);
+  background-image:
+    radial-gradient(ellipse 90% 70% at 15% 8%, rgba(20,22,14,0.9) 0%, transparent 55%),
+    linear-gradient(150deg,
+      #101109 0%,
+      #1c1712 22%,
+      #6b3416 46%,
+      #c46a2c 68%,
+      #e6a875 86%,
+      #f0d2b8 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+:root[data-theme="light"] body {
+  background-image: none;
+}
+
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+}
+
+/* ---------- "Login" cosmético ----------
+   Gate puramente visual: el dashboard (.wrap) queda oculto hasta que
+   <body> tenga la clase "authed" (la agrega app.js al validar el mail
+   contra el mapa USERS, o al encontrar una sesión guardada en
+   localStorage). No es seguridad real — ver nota en app.js. */
+.wrap { visibility: hidden; }
+body.authed .wrap { visibility: visible; }
+body.authed #login-overlay { display: none; }
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface-1-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
+  padding: 30px 26px;
+  text-align: center;
+}
+.login-card h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+.login-sub {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+#login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#login-email {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+#login-email::placeholder { color: var(--text-muted); }
+#login-email:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+#login-form button {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+#login-form button:hover { background: var(--accent-strong); }
+.login-error {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--status-critical);
+}
+.login-error[hidden] { display: none; }
+
+/* ---------- Encabezado ---------- */
+header.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+header.top h1 {
+  font-size: 20px;
+  margin: 0;
+  color: var(--text-primary);
+}
+.top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.actualizado {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+#logout-link { font-size: 12px; }
+
+/* ---------- Navegación (índice) ---------- */
+nav.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--gridline);
+  margin-bottom: 20px;
+}
+nav.tabs button {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: background .12s ease, color .12s ease;
+}
+nav.tabs button:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+nav.tabs button[aria-selected="true"] {
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- Vidrio esmerilado: base compartida por tarjetas/filtros/KPIs ---------- */
+.filters, .kpi, .card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
+}
+
+/* ---------- Filtros ---------- */
+.filters {
+  /* .filters ya es su propio "stacking context" por el backdrop-filter
+     (regla compartida .filters,.kpi,.card de más arriba) — sin position +
+     z-index explícitos acá, los paneles del multiselect (más abajo)
+     quedarían atrapados detrás de tarjetas posteriores (KPIs, gráficos),
+     que también son stacking contexts por su propio backdrop-filter. */
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Selector "> label" (hijo directo) a propósito: solo el título del
+   filtro ("Marca", "Tipo de campaña"...), NO los <label> anidados de
+   las opciones del multiselect (esos deben verse con su texto normal,
+   no en mayúsculas). */
+.filter-field > label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-muted);
+}
+.filter-field select,
+.filter-field input[type="date"] {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  min-width: 140px;
+  color-scheme: inherit;
+}
+.filter-field select:focus,
+.filter-field input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+/* ---------- Filtro de selección múltiple (Marca / Tipo de campaña) ---------- */
+.multiselect { position: relative; }
+.multiselect-btn {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  min-width: 140px;
+  max-width: 220px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.multiselect-btn::after {
+  content: '▾';
+  color: var(--text-muted);
+  font-size: 10px;
+  flex: none;
+}
+.multiselect-btn:focus,
+.multiselect-btn[aria-expanded="true"] {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.multiselect-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 230px;
+  max-width: 300px;
+  background: var(--surface-2-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
+  padding: 6px;
+}
+.multiselect-panel[hidden] { display: none; }
+.multiselect-clear {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 7px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.multiselect-clear:hover { background: var(--surface-2); color: var(--accent-strong); }
+.multiselect-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+  border-top: 1px solid var(--gridline);
+  padding-top: 4px;
+}
+.multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.multiselect-option:hover { background: var(--surface-2); }
+.multiselect-option input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.filter-field.compare-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.filter-field.compare-toggle label {
+  text-transform: none;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.filter-field.compare-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+.compare-range {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.compare-range[hidden] { display: none; }
+
+/* ---------- Tarjetas / KPIs ---------- */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi {
+  padding: 16px 18px;
+}
+.kpi .label {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.kpi .value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: proportional-nums;
+  color: var(--text-primary);
+}
+.kpi .delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.kpi .delta.up   { color: var(--status-good);     background: var(--status-good-bg); }
+.kpi .delta.down { color: var(--status-critical);  background: var(--status-critical-bg); }
+.kpi .delta.prev { color: var(--text-muted);       background: var(--surface-2); }
+
+/* ---------- Tarjeta de gráfico ---------- */
+.card {
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.card-head h2 {
+  font-size: 15px;
+  margin: 0;
+  color: var(--text-primary);
+}
+.card-head .sub {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .chart-row { grid-template-columns: 1fr; }
+}
+.chart-box { position: relative; height: 220px; }
+.chart-box canvas { max-width: 100%; }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.link-btn:hover { color: var(--accent-strong); }
+
+/* ---------- Tarjeta "Mejor campaña del período" ---------- */
+.best-campaign-card {
+  /* position+z-index explícitos: .card ya es su propio stacking context
+     (backdrop-filter), así que sin esto el dropdown "según..." quedaría
+     atrapado detrás de la tarjeta siguiente (mismo caso que .filters). */
+  position: relative;
+  border-left: 3px solid var(--accent);
+}
+.best-campaign-card .card-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.best-campaign-card .card-head svg { flex: none; color: var(--accent); }
+.best-campaign-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.best-campaign-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.best-campaign-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.best-campaign-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+.best-campaign-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.25;
+  word-break: break-word;
+}
+.best-campaign-stats {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.best-campaign-stat .label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.best-campaign-stat .value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.best-campaign-stat.highlight .value { color: var(--accent); }
+
+/* Dropdown "según {criterio}" — reusa el look de .multiselect-btn /
+   .multiselect-panel (mismo componente visual que Marca/Tipo) pero más
+   compacto/discreto, ya que va dentro de un card-head junto al título. */
+.best-campaign-sort-btn {
+  min-width: 0;
+  max-width: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+.best-campaign-sort-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.best-campaign-sort-btn[aria-expanded="true"] {
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.best-campaign-sort-panel {
+  left: auto;
+  right: 0;
+  min-width: 180px;
+}
+.best-campaign-sort-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.best-campaign-sort-option.is-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Tablas ---------- */
+.table-scroll {
+  overflow-x: auto;
+}
+table.data {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+table.data caption {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+table.data th, table.data td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gridline);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+table.data th:first-child, table.data td:first-child,
+table.data th.txt, table.data td.txt {
+  text-align: left;
+  font-variant-numeric: normal;
+}
+table.data th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+table.data th.sortable:hover { color: var(--text-primary); }
+table.data td.rank, table.data th.rank {
+  text-align: center;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  width: 1%;
+}
+
+/* "Resumen por campaña" puede tener cientos de filas — se deja un alto
+   fijo (~10 filas) con scroll interno propio y encabezado siempre
+   visible, para que la pestaña "Campañas" no quede kilométrica. */
+#tabla-campanas {
+  max-height: 430px;
+  overflow-y: auto;
+}
+table.data thead th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--baseline);
+  position: sticky;
+  top: 0;
+  background: var(--surface-1-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+table.data tbody tr:hover { background: var(--surface-2); }
+table.data td.prev { color: var(--text-muted); }
+table.data td.delta.up { color: var(--status-good); }
+table.data td.delta.down { color: var(--status-critical); }
+table.data tfoot td {
+  font-weight: 700;
+  border-top: 1px solid var(--baseline);
+  border-bottom: none;
+}
+
+/* ---------- Heatmap (Marca x Tipo) ---------- */
+table.heatmap td.cell {
+  text-align: center;
+  color: #eee !important;
+  font-variant-numeric: tabular-nums;
+  min-width: 90px;
+  border-radius: 6px;
+}
+table.heatmap td.cell.empty {
+  color: var(--text-muted);
+  background: var(--surface-2) !important;
+}
+
+/* ---------- Tooltip de gráfico (Chart.js custom) ---------- */
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--text-primary);
+  color: var(--page-plane);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  transform: translate(-50%, -110%);
+  transition: opacity .08s ease;
+  z-index: 5;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.chart-tooltip .row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.chart-tooltip .swatch { width: 10px; height: 2px; display: inline-block; }
+.chart-tooltip .val { font-weight: 700; margin-left: auto; padding-left: 10px; }
+
+/* ---------- Estado vacío ---------- */
+.empty-state {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 30px 10px;
+  font-size: 13px;
+}
+
+footer.note {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 24px;
+}

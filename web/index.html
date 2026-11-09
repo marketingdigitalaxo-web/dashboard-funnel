@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recorrido del cliente</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="funnel.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body class="authed">
+<div class="wrap">
+
+  <header class="top">
+    <h1>Recorrido del cliente — todas las marcas</h1>
+    <div class="top-right">
+      <span class="actualizado" id="actualizado">Cargando datos…</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="resumen">Resumen</button>
+    <button role="tab" aria-selected="false" data-tab="recorrido">Recorrido</button>
+    <button role="tab" aria-selected="false" data-tab="canales">Canales</button>
+    <button role="tab" aria-selected="false" data-tab="paginas">Páginas y secciones</button>
+    <button role="tab" aria-selected="false" data-tab="productos">Productos</button>
+    <button role="tab" aria-selected="false" data-tab="hoy">Hoy</button>
+  </nav>
+
+  <section class="filters" aria-label="Filtros" id="filtros">
+    <div class="filter-field">
+      <label for="f-periodo">Período</label>
+      <select id="f-periodo"></select>
+    </div>
+    <div class="filter-field">
+      <label id="f-marca-label">Marca</label>
+      <div class="multiselect">
+        <button type="button" class="multiselect-btn" id="f-marca-btn" aria-expanded="false" aria-labelledby="f-marca-label">Todas</button>
+        <div class="multiselect-panel" id="f-marca-panel" hidden>
+          <button type="button" class="multiselect-clear" id="f-marca-clear">Todas (limpiar selección)</button>
+          <div class="multiselect-list" id="f-marca-list"></div>
+        </div>
+      </div>
+    </div>
+    <div class="filter-field">
+      <label for="f-canal">Canal</label>
+      <select id="f-canal"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-field">
+      <label for="f-dev">Dispositivo</label>
+      <select id="f-dev">
+        <option value="">Todos</option>
+        <option value="mobile">Móvil</option>
+        <option value="desktop">Escritorio</option>
+        <option value="tablet">Tablet</option>
+      </select>
+    </div>
+    <p class="filters-note" id="filtros-nota"></p>
+  </section>
+
+  <!-- ================= RESUMEN ================= -->
+  <section id="tab-resumen" class="tab-panel">
+    <div class="kpi-row" id="kpis"></div>
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Embudo por marca</h2>
+          <span class="sub">% de sesiones que llega a cada paso</span>
+        </div>
+        <div class="table-scroll" id="tabla-embudo-marca"></div>
+        <p class="legend-note"><span class="chip good">más alto</span> / <span class="chip bad">más bajo</span> = al menos 10% sobre o bajo el promedio del grupo</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Oportunidades detectadas</h2>
+          <span class="sub">reglas automáticas, con volumen mínimo</span>
+        </div>
+        <div id="oportunidades"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RECORRIDO ================= -->
+  <section id="tab-recorrido" class="tab-panel" hidden>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Embudo clásico</h2><span class="sub" id="embudo-sub"></span></div>
+        <div id="embudo-barras"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="prof-titulo">Conversión según PDP vistas en la sesión</h2>
+          <div class="seg" role="group" aria-label="Tipo de página">
+            <button type="button" data-prof="PDP" aria-pressed="true">PDP</button>
+            <button type="button" data-prof="PLP" aria-pressed="false">PLP</button>
+          </div>
+        </div>
+        <div class="chart-box"><canvas id="chart-prof"></canvas></div>
+        <p class="legend-note" id="prof-nota"></p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Conversión por día</h2><span class="sub">compras / sesiones</span></div>
+      <div class="chart-box"><canvas id="chart-conv-dia"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Recorridos más comunes</h2><span class="sub">secuencia de tipos de página en la sesión (primeros 6 pasos)</span></div>
+      <div class="table-scroll tall" id="tabla-recorridos"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Buscador</h2><span class="sub">sesiones con compra</span></div>
+        <div class="kpi-row compact" id="kpis-busqueda"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Términos de búsqueda</h2><span class="sub" id="busq-sub"></span></div>
+        <div class="table-scroll tall" id="tabla-busqueda"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CANALES ================= -->
+  <section id="tab-canales" class="tab-panel" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Resumen por canal</h2></div>
+      <div class="table-scroll" id="tabla-canales"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Marca × canal</h2><span class="sub">conversión (compras / sesiones)</span></div>
+      <div class="table-scroll" id="matriz-canal"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Detalle por fuente / medio</h2></div>
+      <div class="table-scroll tall" id="tabla-fuentes"></div>
+    </div>
+  </section>
+
+  <!-- ================= PÁGINAS ================= -->
+  <section id="tab-paginas" class="tab-panel" hidden>
+    <div class="toolbar">
+      <div class="filter-field">
+        <label for="p-marca">Marca a analizar</label>
+        <select id="p-marca"></select>
+      </div>
+      <label class="check"><input type="checkbox" id="p-pdp" /> Mostrar PDP (fichas de producto)</label>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Retener: mucho tráfico, mucha salida</h2></div>
+        <p class="card-desc">Páginas donde se va mucha gente sin seguir navegando. Buen lugar para una campaña que invite a seguir.</p>
+        <div id="espacios-retener"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Puentes hacia la compra</h2></div>
+        <p class="card-desc">Páginas desde donde mucha gente pasa a un producto o al carro. Buen lugar para inducir el cierre.</p>
+        <div id="espacios-puente"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Secciones del sitio</h2>
+        <span class="sub">clic en ▸ para desplegar subsecciones; clic en la ruta para ver hacia dónde va la gente</span>
+      </div>
+      <div class="table-scroll tall" id="tabla-paginas"></div>
+    </div>
+    <div class="card" id="card-transiciones" hidden>
+      <div class="card-head"><h2 id="trans-titulo"></h2><button class="link-btn" id="trans-cerrar">Cerrar</button></div>
+      <div id="tabla-transiciones"></div>
+    </div>
+  </section>
+
+  <!-- ================= PRODUCTOS ================= -->
+  <section id="tab-productos" class="tab-panel" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Muy vistos, poco agregados al carro</h2><span class="sub">más de 300 vistas y agregan menos de la mitad que el promedio de su marca</span></div>
+      <div class="table-scroll" id="tabla-oportunidad-prod"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Productos</h2><span class="sub">ordena por cualquier columna</span></div>
+      <div class="table-scroll tall" id="tabla-productos"></div>
+    </div>
+  </section>
+
+  <!-- ================= HOY ================= -->
+  <section id="tab-hoy" class="tab-panel" hidden>
+    <div class="kpi-row" id="kpis-hoy"></div>
+    <div class="card">
+      <div class="card-head"><h2>Sesiones por hora</h2><span class="sub" id="hoy-sub"></span></div>
+      <div class="chart-box"><canvas id="chart-hoy"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Por marca, hasta la última hora completa</h2><span class="sub">vs mismo día de la semana pasada, a la misma hora</span></div>
+      <div class="table-scroll" id="tabla-hoy"></div>
+    </div>
+  </section>
+
+  <footer class="note" id="footer-nota">
+    Datos de GA4 (exportación a BigQuery), actualizados automáticamente por GitHub Actions.
+    Conversión = compras / sesiones. Victoria's Secret tiene un problema de medición conocido (sesiones incompletas): sus métricas por sesión no son comparables con las otras marcas.
+  </footer>
+</div>
+<div class="chart-tooltip" id="tooltip" style="opacity:0"></div>
+<script src="app.js"></script>
+</body>
+</html>
