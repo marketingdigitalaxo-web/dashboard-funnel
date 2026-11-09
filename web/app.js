@@ -31,7 +31,7 @@ const SIGUIENTE = [
 
 const state = {
   meta: null, diario: null, hoy: null, periodos: {},
-  periodo: CONFIG.periodoDefecto, marcas: new Set(), canal: '', dev: '',
+  periodo: CONFIG.periodoDefecto, marcas: new Set(), canales: new Set(), devs: new Set(),
   tab: 'resumen', prof: 'PDP', pMarca: null, pPDP: false, abiertos: new Set(),
   charts: {}, sort: {},
 };
@@ -70,8 +70,8 @@ const CAMPOS_EMBUDO = ['sesiones', 's_home', 's_plp', 's_pdp', 's_busq', 's_carr
 function filasEmbudo(desde, hasta, { ignorarMarca = false, ignorarCanal = false } = {}) {
   return state.diario.embudo.filter((f) => f.fecha >= desde && f.fecha <= hasta
     && (ignorarMarca || enMarcas(f.marca))
-    && (ignorarCanal || !state.canal || f.canal === state.canal)
-    && (!state.dev || f.dev === state.dev));
+    && (ignorarCanal || state.canales.size === 0 || state.canales.has(f.canal))
+    && (state.devs.size === 0 || state.devs.has(f.dev)));
 }
 function agruparPor(filas, clave, campos) {
   const m = new Map();
@@ -155,30 +155,96 @@ function opcionesBase() {
 }
 
 /* ---------- filtros ---------- */
+// Desplegable con el mismo estilo para todos los filtros (el del filtro
+// "Marca" del dashboard de campañas). multi = casillas; si no, una opción.
+function desplegable(cont, { opciones, multi, todos, sel, alCambiar, labelId }) {
+  cont.innerHTML = `<button type="button" class="multiselect-btn" aria-expanded="false"${labelId ? ` aria-labelledby="${labelId}"` : ''}></button>
+    <div class="multiselect-panel" hidden>
+      ${multi ? `<button type="button" class="multiselect-clear">${esc(todos)} (limpiar selección)</button>` : ''}
+      <div class="multiselect-list">${opciones.map((o) => multi
+        ? `<label class="multiselect-option"><input type="checkbox" value="${esc(o.v)}" /> ${esc(o.l)}</label>`
+        : `<button type="button" class="multiselect-option opcion-unica" data-v="${esc(o.v)}">${esc(o.l)}</button>`).join('')}</div>
+    </div>`;
+  const btn = cont.querySelector('.multiselect-btn'), panel = cont.querySelector('.multiselect-panel');
+  const nombre = (v) => (opciones.find((o) => o.v === v) || {}).l || v;
+  const pintar = () => {
+    const actual = sel();
+    if (multi) {
+      btn.textContent = actual.size === 0 ? todos : actual.size === 1 ? nombre([...actual][0]) : actual.size + ' seleccionados';
+      cont.querySelectorAll('input').forEach((i) => { i.checked = actual.has(i.value); });
+    } else {
+      btn.textContent = nombre(actual);
+      cont.querySelectorAll('.opcion-unica').forEach((b) => b.classList.toggle('is-active', b.dataset.v === actual));
+    }
+  };
+  const cerrar = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', () => {
+    const abrir = panel.hidden;
+    document.querySelectorAll('.multiselect-panel').forEach((x) => { x.hidden = true; });
+    document.querySelectorAll('.multiselect-btn').forEach((x) => x.setAttribute('aria-expanded', 'false'));
+    panel.hidden = !abrir; btn.setAttribute('aria-expanded', String(abrir));
+  });
+  if (multi) {
+    cont.querySelector('.multiselect-list').addEventListener('change', (e) => {
+      const actual = sel();
+      if (e.target.checked) actual.add(e.target.value); else actual.delete(e.target.value);
+      pintar(); alCambiar();
+    });
+    cont.querySelector('.multiselect-clear').addEventListener('click', () => { sel().clear(); pintar(); alCambiar(); });
+  } else {
+    cont.querySelectorAll('.opcion-unica').forEach((b) => b.addEventListener('click', () => { alCambiar(b.dataset.v); pintar(); cerrar(); }));
+  }
+  pintar();
+  return { pintar };
+}
+
+const DEV_LABEL = { mobile: 'Móvil', desktop: 'Escritorio', tablet: 'Tablet', smart_tv: 'Smart TV', otro: 'Otro' };
+// Qué filtros se ven en cada pestaña (los que no aplican se ocultan).
+const FILTROS_TAB = {
+  resumen: ['periodo', 'marca', 'canal', 'dev'],
+  recorrido: ['periodo', 'marca', 'canal', 'dev'],
+  canales: ['periodo', 'marca', 'dev'],
+  paginas: ['periodo', 'pmarca', 'pdp'],
+  productos: ['periodo', 'marca'],
+  hoy: ['marca'],
+};
+
 function armarFiltros() {
-  const sel = document.getElementById('f-periodo');
-  sel.innerHTML = state.meta.periodos.map((p) => `<option value="${p.id}">${esc(p.nombre)} (${p.desde.slice(5).split('-').reverse().join('/')}–${p.hasta.slice(5).split('-').reverse().join('/')})</option>`).join('');
   if (!state.meta.periodos.some((p) => p.id === state.periodo)) state.periodo = state.meta.periodos[0].id;
-  sel.value = state.periodo;
-  sel.addEventListener('change', () => { state.periodo = sel.value; render(); });
-
+  const fecha = (iso) => iso.slice(5).split('-').reverse().join('/');
+  desplegable(document.getElementById('dd-periodo'), {
+    labelId: 'l-periodo', multi: false,
+    opciones: state.meta.periodos.map((p) => ({ v: p.id, l: `${p.nombre} (${fecha(p.desde)}–${fecha(p.hasta)})` })),
+    sel: () => state.periodo, alCambiar: (v) => { state.periodo = v; render(); },
+  });
+  desplegable(document.getElementById('dd-marca'), {
+    labelId: 'l-marca', multi: true, todos: 'Todas',
+    opciones: state.meta.marcas.map((m) => ({ v: m, l: m })),
+    sel: () => state.marcas, alCambiar: () => render(),
+  });
+  desplegable(document.getElementById('dd-pmarca'), {
+    labelId: 'l-pmarca', multi: false,
+    opciones: state.meta.marcas.map((m) => ({ v: m, l: m })),
+    sel: () => state.pMarca || state.meta.marcas[0], alCambiar: (v) => { state.pMarca = v; state.abiertos.clear(); render(); },
+  });
   const canales = [...new Set(state.diario.embudo.map((f) => f.canal))].sort();
-  document.getElementById('f-canal').insertAdjacentHTML('beforeend', canales.map((c) => `<option>${esc(c)}</option>`).join(''));
-  document.getElementById('f-canal').addEventListener('change', (e) => { state.canal = e.target.value; render(); });
-  document.getElementById('f-dev').addEventListener('change', (e) => { state.dev = e.target.value; render(); });
-
-  const btn = document.getElementById('f-marca-btn'), panel = document.getElementById('f-marca-panel'), list = document.getElementById('f-marca-list');
-  list.innerHTML = state.meta.marcas.map((m) => `<label class="multiselect-option"><input type="checkbox" value="${esc(m)}" /> ${esc(m)}</label>`).join('');
-  const etiqueta = () => { btn.textContent = state.marcas.size === 0 ? 'Todas' : state.marcas.size === 1 ? [...state.marcas][0] : state.marcas.size + ' seleccionadas'; };
-  list.addEventListener('change', (e) => {
-    if (e.target.checked) state.marcas.add(e.target.value); else state.marcas.delete(e.target.value);
-    etiqueta(); render();
+  desplegable(document.getElementById('dd-canal'), {
+    labelId: 'l-canal', multi: true, todos: 'Todos',
+    opciones: canales.map((c) => ({ v: c, l: c })),
+    sel: () => state.canales, alCambiar: () => render(),
   });
-  document.getElementById('f-marca-clear').addEventListener('click', () => {
-    state.marcas.clear(); list.querySelectorAll('input').forEach((i) => { i.checked = false; }); etiqueta(); render();
+  const devs = [...new Set(state.diario.embudo.map((f) => f.dev))].sort((a, b) => (a === 'mobile' ? -1 : b === 'mobile' ? 1 : a.localeCompare(b)));
+  desplegable(document.getElementById('dd-dev'), {
+    labelId: 'l-dev', multi: true, todos: 'Todos',
+    opciones: devs.map((d) => ({ v: d, l: DEV_LABEL[d] || d })),
+    sel: () => state.devs, alCambiar: () => render(),
   });
-  btn.addEventListener('click', () => { const abrir = panel.hidden; panel.hidden = !abrir; btn.setAttribute('aria-expanded', String(abrir)); });
-  document.addEventListener('click', (e) => { if (!e.target.closest('.multiselect')) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.multiselect')) {
+      document.querySelectorAll('.multiselect-panel').forEach((x) => { x.hidden = true; });
+      document.querySelectorAll('.multiselect-btn').forEach((x) => x.setAttribute('aria-expanded', 'false'));
+    }
+  });
 
   document.querySelectorAll('nav.tabs button').forEach((b) => b.addEventListener('click', () => {
     state.tab = b.dataset.tab;
@@ -191,20 +257,19 @@ function armarFiltros() {
     document.querySelectorAll('[data-prof]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     renderProfundidad();
   }));
-
-  const pm = document.getElementById('p-marca');
-  pm.innerHTML = state.meta.marcas.map((m) => `<option>${esc(m)}</option>`).join('');
-  pm.addEventListener('change', () => { state.pMarca = pm.value; state.abiertos.clear(); render(); });
   document.getElementById('p-pdp').addEventListener('change', (e) => { state.pPDP = e.target.checked; render(); });
   document.getElementById('trans-cerrar').addEventListener('click', () => { document.getElementById('card-transiciones').hidden = true; });
 }
 
 function notaFiltros() {
+  const visibles = FILTROS_TAB[state.tab] || [];
+  document.querySelectorAll('#filtros [data-f]').forEach((el) => { el.hidden = !visibles.includes(el.dataset.f); });
   const n = [];
-  if (state.tab === 'paginas' || state.tab === 'productos') n.push('Canal y dispositivo no aplican a esta pestaña (las páginas y productos se resumen sin ese corte).');
-  if (state.tab === 'recorrido' && (state.canal || state.dev)) n.push('Canal y dispositivo aplican al embudo, la profundidad y la conversión por día; recorridos y términos de búsqueda se muestran sin ese corte.');
-  if (state.tab === 'hoy') n.push('"Hoy" muestra el día en curso; el período, el canal y el dispositivo no aplican.');
-  if (state.marcas.has('VS') || state.marcas.size === 0) n.push('Incluye Victoria\'s Secret, cuya medición de sesiones está incompleta.');
+  if (state.tab === 'recorrido' && (state.canales.size || state.devs.size)) n.push('Canal y dispositivo aplican al embudo, la profundidad y la conversión por día; recorridos y términos de búsqueda se muestran sin ese corte.');
+  if (state.tab === 'recorrido' && state.canales.size) n.push('La profundidad no se puede cortar por canal.');
+  if (state.tab === 'hoy') n.push('"Hoy" muestra el día en curso, comparado con el mismo día de la semana pasada.');
+  const conVS = state.tab === 'paginas' ? state.pMarca === 'VS' : (state.marcas.has('VS') || state.marcas.size === 0);
+  if (conVS) n.push('Incluye Victoria\'s Secret, cuya medición de sesiones está incompleta.');
   document.getElementById('filtros-nota').textContent = n.join(' ');
 }
 
@@ -375,7 +440,7 @@ async function renderRecorrido() {
 
 function renderProfundidad() {
   const p = periodoMeta();
-  const filas = state.diario.profundidad.filter((f) => f.fecha >= p.desde && f.fecha <= p.hasta && enMarcas(f.marca) && (!state.dev || f.dev === state.dev) && f.tipo === state.prof);
+  const filas = state.diario.profundidad.filter((f) => f.fecha >= p.desde && f.fecha <= p.hasta && enMarcas(f.marca) && (state.devs.size === 0 || state.devs.has(f.dev)) && f.tipo === state.prof);
   const g = agruparPor(filas, 'tramo', ['sesiones', 's_compra']);
   const m = Object.fromEntries(g.map((x) => [x.key, x]));
   const conTipo = TRAMOS.reduce((s, t) => s + (m[t] ? m[t].sesiones : 0), 0);
@@ -459,7 +524,7 @@ async function renderCanales() {
         { h: 'Ingresos', v: (f) => f.ingresos, f: fMoney },
         { h: 'Δ sesiones', v: (f) => varRel(f.sesiones, f.sesiones_ant), f: fDelta, cls: (f) => clsDelta(varRel(f.sesiones, f.sesiones_ant)) },
       ],
-      filas: pd.canales_detalle.filter((r) => enMarcas(r.marca) && (!state.canal || r.canal === state.canal)),
+      filas: pd.canales_detalle.filter((r) => enMarcas(r.marca) && (state.canales.size === 0 || state.canales.has(r.canal))),
     });
   } catch (e) { console.warn(e); }
 }
@@ -488,11 +553,7 @@ function armarArbol(filas) {
   return { nodos, raices };
 }
 async function renderPaginas() {
-  const sel = document.getElementById('p-marca');
-  if (!state.pMarca || !state.meta.marcas.includes(state.pMarca)) {
-    state.pMarca = state.marcas.size ? [...state.marcas][0] : state.meta.marcas[0];
-  }
-  sel.value = state.pMarca;
+  if (!state.pMarca || !state.meta.marcas.includes(state.pMarca)) state.pMarca = state.meta.marcas[0];
   let pd;
   try { pd = await periodoData(state.periodo); } catch (e) { return; }
   const filas = pd.paginas.filter((r) => r.marca === state.pMarca && (state.pPDP || r.tipo !== 'PDP'));
@@ -522,7 +583,7 @@ async function renderPaginas() {
   };
   const cont = document.getElementById('tabla-paginas');
   const leyenda = `<div class="next-legend">Hacia dónde va después: ${SIGUIENTE.map((s) => `<span><i style="background:${s.color}"></i>${s.label}</span>`).join('')}</div>`;
-  cont.innerHTML = leyenda + (filasTabla.length ? `<table class="data"><thead><tr><th>Ruta</th><th class="txt">Tipo</th><th>Vistas sección</th><th>Vistas página</th><th>Entradas</th><th>Conv. entrada</th><th>Siguen navegando</th><th>Δ vistas</th><th class="txt">Hacia dónde va</th></tr></thead><tbody>${filasTabla.map(({ n, nivel }) => {
+  cont.innerHTML = leyenda + (filasTabla.length ? `<table class="data"><thead><tr><th>Ruta</th><th class="txt">Tipo</th><th>Vistas sección</th><th>Vistas página</th><th title="Sesiones que comenzaron en esta página (página de aterrizaje)">Entradas</th><th title="De las sesiones que entraron por esta página, % que compró">Conv. entrada</th><th title="% de las vistas tras las cuales se abrió otra página">Siguen navegando</th><th>Δ vistas</th><th class="txt">Hacia dónde va</th></tr></thead><tbody>${filasTabla.map(({ n, nivel }) => {
     const r = n.propio;
     const dv = r ? varRel(r.vistas, r.vistas_ant) : NaN;
     return `<tr><td class="path-cell" style="padding-left:${10 + nivel * 18}px"><button class="tree-toggle" data-path="${esc(n.path)}" ${n.hijos.size ? '' : 'disabled'} aria-label="Desplegar">${state.abiertos.has(n.path) ? '▾' : '▸'}</button>${r ? `<button class="path-link" data-trans="${esc(n.path)}">${esc(n.path)}</button>` : `<span>${esc(n.path)}</span>`}</td>
@@ -648,7 +709,6 @@ function renderHoy() {
 /* ---------- render general ---------- */
 async function render() {
   notaFiltros();
-  document.getElementById('filtros').classList.toggle('dim', state.tab === 'hoy');
   const t = state.tab;
   if (t === 'resumen') renderResumen();
   else if (t === 'recorrido') await renderRecorrido();

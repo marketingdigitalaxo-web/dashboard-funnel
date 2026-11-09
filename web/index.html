@@ -28,33 +28,27 @@
   </nav>
 
   <section class="filters" aria-label="Filtros" id="filtros">
-    <div class="filter-field">
-      <label for="f-periodo">Período</label>
-      <select id="f-periodo"></select>
+    <div class="filter-field" data-f="periodo">
+      <label id="l-periodo">Período</label>
+      <div class="multiselect" id="dd-periodo"></div>
     </div>
-    <div class="filter-field">
-      <label id="f-marca-label">Marca</label>
-      <div class="multiselect">
-        <button type="button" class="multiselect-btn" id="f-marca-btn" aria-expanded="false" aria-labelledby="f-marca-label">Todas</button>
-        <div class="multiselect-panel" id="f-marca-panel" hidden>
-          <button type="button" class="multiselect-clear" id="f-marca-clear">Todas (limpiar selección)</button>
-          <div class="multiselect-list" id="f-marca-list"></div>
-        </div>
-      </div>
+    <div class="filter-field" data-f="marca">
+      <label id="l-marca">Marca</label>
+      <div class="multiselect" id="dd-marca"></div>
     </div>
-    <div class="filter-field">
-      <label for="f-canal">Canal</label>
-      <select id="f-canal"><option value="">Todos</option></select>
+    <div class="filter-field" data-f="pmarca" hidden>
+      <label id="l-pmarca">Marca a analizar</label>
+      <div class="multiselect" id="dd-pmarca"></div>
     </div>
-    <div class="filter-field">
-      <label for="f-dev">Dispositivo</label>
-      <select id="f-dev">
-        <option value="">Todos</option>
-        <option value="mobile">Móvil</option>
-        <option value="desktop">Escritorio</option>
-        <option value="tablet">Tablet</option>
-      </select>
+    <div class="filter-field" data-f="canal">
+      <label id="l-canal">Canal</label>
+      <div class="multiselect" id="dd-canal"></div>
     </div>
+    <div class="filter-field" data-f="dev">
+      <label id="l-dev">Dispositivo</label>
+      <div class="multiselect" id="dd-dev"></div>
+    </div>
+    <label class="check" data-f="pdp" hidden><input type="checkbox" id="p-pdp" /> Mostrar PDP (fichas de producto)</label>
     <p class="filters-note" id="filtros-nota"></p>
   </section>
 
@@ -137,13 +131,6 @@
 
   <!-- ================= PÁGINAS ================= -->
   <section id="tab-paginas" class="tab-panel" hidden>
-    <div class="toolbar">
-      <div class="filter-field">
-        <label for="p-marca">Marca a analizar</label>
-        <select id="p-marca"></select>
-      </div>
-      <label class="check"><input type="checkbox" id="p-pdp" /> Mostrar PDP (fichas de producto)</label>
-    </div>
     <div class="grid-2">
       <div class="card">
         <div class="card-head"><h2>Retener: mucho tráfico, mucha salida</h2></div>
@@ -161,6 +148,7 @@
         <h2>Secciones del sitio</h2>
         <span class="sub">clic en ▸ para desplegar subsecciones; clic en la ruta para ver hacia dónde va la gente</span>
       </div>
+      <p class="card-desc"><b>Entradas</b>: sesiones que comenzaron en esa página (la primera página de la visita, o "página de aterrizaje"). <b>Conv. entrada</b>: de esas sesiones, % que terminó comprando. <b>Siguen navegando</b>: % de las vistas de la página tras las cuales la persona abrió otra página.</p>
       <div class="table-scroll tall" id="tabla-paginas"></div>
     </div>
     <div class="card" id="card-transiciones" hidden>
