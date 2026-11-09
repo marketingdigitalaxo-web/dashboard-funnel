@@ -77,6 +77,9 @@ jobs:
         run: |
           mkdir -p site
           cp -r web/. site/
+          # Versiona los archivos para que el navegador no muestre una versión vieja en caché.
+          V="${GITHUB_SHA::8}"
+          sed -i -e "s#app.js\"#app.js?v=${V}\"#" -e "s#style.css\"#style.css?v=${V}\"#" -e "s#funnel.css\"#funnel.css?v=${V}\"#" site/index.html
           python scripts/construir.py
 
       - uses: actions/upload-pages-artifact@v3
