@@ -157,7 +157,12 @@ def main():
 
     # Tablas grandes por período.
     lista = []
-    for pid, pnombre, desde, hasta, desde_ant, hasta_ant in periodos(ultimo):
+    todos = periodos(ultimo)
+    # Solo períodos con todos sus días cargados (si ninguno lo está, el más
+    # corto, para que el dashboard igual muestre algo).
+    completos = [p for p in todos
+                 if sum(1 for f in fechas if p[2] <= f <= p[3]) == (p[3] - p[2]).days + 1]
+    for pid, pnombre, desde, hasta, desde_ant, hasta_ant in (completos or todos[:1]):
         en = [f for f in fechas if desde <= f <= hasta]
         if not en:
             continue
