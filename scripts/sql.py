@@ -108,6 +108,36 @@ CANAL_SQL = r"""
   END"""
 
 
+UDF_RECORRIDO = r'''-- 0) resumen del recorrido como en GA4: las repeticiones seguidas de PDP, de
+--    PLP, y de los pares PLP > PDP / PDP > PLP se juntan en un paso "× n".
+--    Formato: pasos separados por " | ", un par como "PLP+PDP", la cantidad
+--    tras "*" (ej. "Home | PLP+PDP*3 | Carro"). Máximo 8 pasos; luego "…".
+CREATE TEMP FUNCTION comprimir_recorrido(t ARRAY<STRING>) RETURNS STRING LANGUAGE js AS r"""
+  if (!t || !t.length) return null;
+  const R = new Set(['PDP', 'PLP']);
+  const out = [];
+  let i = 0;
+  while (i < t.length && out.length < 9) {
+    const a = t[i];
+    if (R.has(a)) {
+      let r = 1;
+      while (i + r < t.length && t[i + r] === a) r++;
+      if (r >= 2) { out.push(a + '*' + r); i += r; continue; }
+      const b = t[i + 1];
+      if (R.has(b) && b !== a) {
+        let k = 1;
+        while (t[i + 2 * k] === a && t[i + 2 * k + 1] === b) k++;
+        if (k >= 2) { out.push(a + '+' + b + '*' + k); i += 2 * k; continue; }
+      }
+    }
+    out.push(a); i++;
+  }
+  if (out.length > 8) { out.length = 8; out.push('…'); }
+  return out.join(' | ');
+""";
+'''
+
+
 def script_diario(dia, marcas=None):
     """Script multi-sentencia para un día (YYYYMMDD). Devuelve (sql, nombres)
     donde nombres es la lista de tablas resumen, en el mismo orden en que
@@ -116,6 +146,7 @@ def script_diario(dia, marcas=None):
     union = "\n  UNION ALL".join(_eventos_marca(m, p, dia) for m, p in props.items())
 
     sql = f"""
+{UDF_RECORRIDO}
 -- 1) eventos relevantes del día, con la ruta de la URL limpia
 CREATE TEMP TABLE eventos AS
 SELECT
@@ -155,7 +186,7 @@ SELECT
   COUNT(*) OVER (PARTITION BY e.marca, e.sk) AS total,
   LEAD(e.path) OVER w AS sig_path,
   LEAD(p.tipo) OVER w AS sig_tipo,
-  IFNULL(LAG(p.tipo) OVER w, '') != p.tipo AS cambia_tipo
+  IFNULL(LAG(e.path) OVER w, '') = e.path AS recarga
 FROM eventos e
 JOIN pg p USING (marca, sk, path)
 WHERE e.ev = 'page_view'
@@ -195,8 +226,7 @@ WITH
   secs AS (
     SELECT marca, sk,
       ANY_VALUE(IF(n = 1, path, NULL)) AS entrada,
-      STRING_AGG(IF(cambia_tipo, tipo, NULL), ' > ' ORDER BY n LIMIT 6) AS seq6,
-      COUNTIF(cambia_tipo) AS pasos
+      comprimir_recorrido(ARRAY_AGG(IF(recarga, NULL, tipo) IGNORE NULLS ORDER BY n LIMIT 60)) AS recorrido
     FROM pv GROUP BY marca, sk
   )
 SELECT
@@ -216,7 +246,7 @@ SELECT
   IFNULL(pags.n_pdp, 0) AS n_pdp,
   IFNULL(pags.n_plp, 0) AS n_plp,
   secs.entrada,
-  CONCAT(secs.seq6, IF(secs.pasos > 6, ' > …', '')) AS recorrido
+  secs.recorrido
 FROM evs
 LEFT JOIN inicio USING (marca, sk)
 LEFT JOIN pags USING (marca, sk)

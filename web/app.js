@@ -245,21 +245,25 @@ function opcionesBase() {
 /* ---------- filtros ---------- */
 // Desplegable con el mismo estilo para todos los filtros (el del filtro
 // "Marca" del dashboard de campañas). multi = casillas; si no, una opción.
-function desplegable(cont, { opciones, multi, todos, sel, alCambiar, labelId }) {
+// Desplegable con el mismo estilo para todos los filtros. multi = casillas
+// (conjunto vacío = todas marcadas, que es lo que se ve por defecto); si no,
+// una opción. solo = botón "Solamente" al pasar el mouse por una opción.
+function desplegable(cont, { opciones, multi, todos, sel, alCambiar, labelId, solo }) {
   cont.innerHTML = `<button type="button" class="multiselect-btn" aria-expanded="false"${labelId ? ` aria-labelledby="${labelId}"` : ''}></button>
     <div class="multiselect-panel" hidden>
-      ${multi ? `<button type="button" class="multiselect-clear">${esc(todos)} (limpiar selección)</button>` : ''}
+      ${multi ? `<button type="button" class="multiselect-clear">Seleccionar ${esc(todos.toLowerCase())}</button>` : ''}
       <div class="multiselect-list">${opciones.map((o) => multi
-        ? `<label class="multiselect-option"><input type="checkbox" value="${esc(o.v)}" /> ${esc(o.l)}</label>`
+        ? `<label class="multiselect-option"><input type="checkbox" value="${esc(o.v)}" /> <span class="op-texto">${esc(o.l)}</span>${solo ? `<button type="button" class="solo-btn" data-v="${esc(o.v)}">Solamente</button>` : ''}</label>`
         : `<button type="button" class="multiselect-option opcion-unica" data-v="${esc(o.v)}">${esc(o.l)}</button>`).join('')}</div>
     </div>`;
   const btn = cont.querySelector('.multiselect-btn'), panel = cont.querySelector('.multiselect-panel');
   const nombre = (v) => (opciones.find((o) => o.v === v) || {}).l || v;
+  const todosV = opciones.map((o) => o.v);
   const pintar = () => {
     const actual = sel();
     if (multi) {
-      btn.textContent = actual.size === 0 ? todos : actual.size === 1 ? nombre([...actual][0]) : actual.size + ' seleccionados';
-      cont.querySelectorAll('input').forEach((i) => { i.checked = actual.has(i.value); });
+      btn.textContent = actual.size === 0 ? todos : actual.size === 1 ? nombre([...actual][0]) : `${actual.size} de ${todosV.length}`;
+      cont.querySelectorAll('input').forEach((i) => { i.checked = actual.size === 0 || actual.has(i.value); });
     } else {
       btn.textContent = nombre(actual);
       cont.querySelectorAll('.opcion-unica').forEach((b) => b.classList.toggle('is-active', b.dataset.v === actual));
@@ -274,10 +278,19 @@ function desplegable(cont, { opciones, multi, todos, sel, alCambiar, labelId }) 
   });
   if (multi) {
     cont.querySelector('.multiselect-list').addEventListener('change', (e) => {
+      if (!e.target.matches('input')) return;
       const actual = sel();
-      if (e.target.checked) actual.add(e.target.value); else actual.delete(e.target.value);
+      if (actual.size === 0) todosV.forEach((v) => actual.add(v)); // "todas" pasa a lista explícita
+      if (e.target.checked) actual.add(e.target.value);
+      else if (actual.size > 1) actual.delete(e.target.value); // siempre queda al menos una
+      if (actual.size === todosV.length) actual.clear();
       pintar(); alCambiar();
     });
+    cont.querySelectorAll('.solo-btn').forEach((b) => b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const actual = sel(); actual.clear(); actual.add(b.dataset.v);
+      pintar(); alCambiar();
+    }));
     cont.querySelector('.multiselect-clear').addEventListener('click', () => { sel().clear(); pintar(); alCambiar(); });
   } else {
     cont.querySelectorAll('.opcion-unica').forEach((b) => b.addEventListener('click', () => { alCambiar(b.dataset.v); pintar(); cerrar(); }));
@@ -324,7 +337,7 @@ function armarFiltros() {
     sel: () => state.comparar, alCambiar: (v) => { state.comparar = v; render(); },
   });
   desplegable(document.getElementById('dd-marca'), {
-    labelId: 'l-marca', multi: true, todos: 'Todas',
+    labelId: 'l-marca', multi: true, todos: 'Todas', solo: true,
     opciones: state.meta.marcas.map((m) => ({ v: m, l: m })),
     sel: () => state.marcas, alCambiar: () => render(),
   });
@@ -525,7 +538,7 @@ async function renderRecorrido(p) {
     tabla(document.getElementById('tabla-recorridos'), {
       id: 'recorridos', defecto: { i: 1, dir: -1 },
       cols: [
-        { h: 'Recorrido', txt: true, v: (f) => f.key },
+        { h: 'Recorrido', txt: true, v: (f) => f.key, html: (f) => chipsRecorrido(f.key) },
         { h: 'Sesiones', v: (f) => f.sesiones, f: fInt },
         { h: '% sesiones', v: (f) => f.sesiones / totalSes, f: fPct },
         { h: 'Compras', v: (f) => f.compras, f: fInt },
@@ -551,6 +564,17 @@ async function renderRecorrido(p) {
       filas: terms.sort((x, y) => y.sesiones - x.sesiones).slice(0, 300),
     });
   } catch (e) { console.warn(e); }
+}
+
+// Recorrido como pasos: "Home | PLP+PDP*3 | Carro" (o el formato antiguo "Home > PLP").
+function chipsRecorrido(txt) {
+  const pasos = txt.includes(' | ') || txt.includes('*') ? txt.split(' | ') : txt.split(' > ');
+  return `<span class="rec">${pasos.map((p) => {
+    if (p === '…') return '<span class="rec-mas" title="el recorrido sigue">…</span>';
+    const [et, n] = p.split('*');
+    const nombre = et.split('+').map(esc).join(' <span class="rec-sep-in">›</span> ');
+    return `<span class="rec-paso${et.includes('+') ? ' par' : ''}">${nombre}${n ? `<b class="rec-n">× ${esc(n)}</b>` : ''}</span>`;
+  }).join('<span class="rec-sep" aria-hidden="true">›</span>')}</span>`;
 }
 
 /* ---------- CANALES ---------- */
