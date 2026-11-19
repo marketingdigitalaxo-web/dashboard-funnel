@@ -13,6 +13,9 @@ on:
       historial_desde:
         description: 'Completar historial desde esta fecha (AAAA-MM-DD). Vacío = solo hoy y los últimos 3 días. Carga acordada: 2025-12-28 (W01 2026)'
         default: ''
+      reprocesar_desde:
+        description: 'Volver a calcular desde esta fecha (AAAA-MM-DD) hasta ayer, aunque ya esté guardado. Usar tras cambiar una definición'
+        default: ''
       solo_publicar:
         description: 'Solo publicar cambios de diseño con los datos ya guardados (no consulta BigQuery, sin costo)'
         type: boolean
@@ -65,6 +68,7 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           HISTORIAL_DESDE: ${{ inputs.historial_desde }}
+          REPROCESAR_DESDE: ${{ inputs.reprocesar_desde }}
         run: python scripts/actualizar.py normal
 
       - name: Guardar datos (rama "datos", un solo commit, sin historial)

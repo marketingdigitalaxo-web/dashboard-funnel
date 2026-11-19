@@ -46,6 +46,9 @@ STORE = os.environ.get("STORE_DIR", "store")
 # los días que el robot reprocesa). La carga completa acordada es desde la
 # W01 de 2026 (domingo 28-dic-2025), y solo se hace cuando el equipo lo pida.
 HISTORIAL_DESDE = os.environ.get("HISTORIAL_DESDE", "").strip()
+# Vuelve a calcular todos los días desde esta fecha hasta ayer, aunque ya
+# estén guardados (p. ej. después de cambiar una definición en el SQL).
+REPROCESAR_DESDE = os.environ.get("REPROCESAR_DESDE", "").strip()
 DIAS_REPROCESO = 3
 DIAS_DETALLE = 21
 MAX_DIAS_POR_CORRIDA = int(os.environ.get("MAX_DIAS_POR_CORRIDA", "30"))
@@ -228,6 +231,14 @@ def modo_normal():
             gb += procesar_dia(client, d)
             tocadas.add(semanas.semana_id(d))
         meta["ultimo_diario"] = hoy.isoformat()
+
+    if REPROCESAR_DESDE:
+        desde = date.fromisoformat(REPROCESAR_DESDE)
+        dias = [desde + timedelta(days=i) for i in range((hoy - desde).days)]
+        print(f"Reproceso desde {desde}: {len(dias)} días (máx. {MAX_DIAS_POR_CORRIDA})")
+        for d in dias[:MAX_DIAS_POR_CORRIDA]:
+            gb += procesar_dia(client, d)
+            tocadas.add(semanas.semana_id(d))
 
     if HISTORIAL_DESDE:
         desde = date.fromisoformat(HISTORIAL_DESDE)
