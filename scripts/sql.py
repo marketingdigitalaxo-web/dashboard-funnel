@@ -71,6 +71,15 @@ def _eventos_marca(marca, prop_id, dia):
   WHERE event_name IN ({', '.join(repr(e) for e in EVENTOS)})"""
 
 
+# Rutas que son listados (PLP) aunque la página no envíe view_item_list.
+# Primer tramo de la URL = categoría o sección comercial; cubre sus derivados
+# (/hombre, /hombre/chaquetas, /hombre/chaquetas/termicas...). Validado con el
+# equipo sobre las páginas "Otra" del 2 al 8 de noviembre de 2026.
+RUTAS_PLP = (r"^/(hombre|mujer|nino|nina|ninos|kids|zapatos|calzado|equipamiento|equipamiento-mammut"
+             r"|accesorios|carteras|lenceria|sale|ofertas|catalogo|tendencias|nueva-temporada"
+             r"|new-arrivals|novedades|especiales|especialestnf|plp|plp-general)(/|$)")
+
+
 # Canal agrupado, a partir de la fuente/medio del inicio de sesión.
 CANAL_SQL = r"""
   CASE
@@ -116,13 +125,16 @@ SELECT
   marca, sk, path,
   MIN(ts) AS t0,
   CASE
-    WHEN path = '/' THEN 'Home'
-    WHEN STARTS_WITH(path, '/checkout/cart') THEN 'Carro'
-    WHEN STARTS_WITH(path, '/checkout') THEN 'Checkout'
-    WHEN LOGICAL_OR(ev = 'view_search_results') OR STARTS_WITH(path, '/catalogsearch') THEN 'Búsqueda'
+    WHEN path IN ('/', '/pink') THEN 'Home'
+    WHEN REGEXP_CONTAINS(path, r'/checkout/cart') THEN 'Carro'
+    WHEN REGEXP_CONTAINS(path, r'/checkout(/|$)') THEN 'Checkout'
+    WHEN LOGICAL_OR(ev = 'view_search_results') OR REGEXP_CONTAINS(path, r'/catalogsearch') THEN 'Búsqueda'
     WHEN LOGICAL_OR(ev = 'view_item') THEN 'PDP'
     WHEN LOGICAL_OR(ev = 'view_item_list') THEN 'PLP'
-    WHEN STARTS_WITH(path, '/customer') OR STARTS_WITH(path, '/sales') THEN 'Cuenta'
+    WHEN REGEXP_CONTAINS(path, r'/(customer|sales)(/|$)') THEN 'Cuenta'
+    -- Listados que no envían view_item_list (validado con el equipo el 19-nov):
+    -- toda ruta bajo una categoría o sección comercial, con sus derivados.
+    WHEN REGEXP_CONTAINS(path, r'{RUTAS_PLP}') THEN 'PLP'
     ELSE 'Otra'
   END AS tipo
 FROM eventos
