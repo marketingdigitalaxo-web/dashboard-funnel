@@ -79,3 +79,18 @@ def correr_consulta(client, sql, max_gb=MAX_GB_HOY):
     job = client.query(sql, job_config=_config(max_gb))
     res = job.result()
     return _tabla(list(res), res.schema), (job.total_bytes_billed or 0) / 1e9
+
+
+def marcas_con_tabla(client, props, dia):
+    """Marcas cuya tabla del día existe (p. ej. Lacoste exporta desde jul-2026).
+    Consultar si una tabla existe no tiene costo."""
+    from google.api_core.exceptions import NotFound
+    from sql import PROJECT
+    ok = []
+    for marca, prop in props.items():
+        try:
+            client.get_table(f"{PROJECT}.analytics_{prop}.events_intraday_{dia}")
+            ok.append(marca)
+        except NotFound:
+            pass
+    return ok

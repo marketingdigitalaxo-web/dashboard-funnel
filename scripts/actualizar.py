@@ -162,8 +162,15 @@ def armar_semana(sid):
 
 def procesar_dia(client, d):
     t0 = time.time()
-    script, nombres = sql.script_diario(ymd(d))
+    marcas = bq.marcas_con_tabla(client, sql.PROPIEDADES, ymd(d))
+    if not marcas:
+        print(f"  {d}: ninguna marca tiene datos ese día")
+        return 0.0
+    faltan = sorted(set(sql.PROPIEDADES) - set(marcas))
+    script, nombres = sql.script_diario(ymd(d), marcas)
     tablas, gb = bq.correr_script(client, script, nombres)
+    if faltan:
+        print(f"  {d}: sin datos de {', '.join(faltan)}")
     guardar_json(ruta("dias", f"{d.isoformat()}.json.gz"),
                  {"fecha": d.isoformat(), "procesado": ahora().isoformat(timespec="seconds"), "tablas": tablas})
     guardar_json(ruta("chico", f"{d.isoformat()}.json.gz"), {"fecha": d.isoformat(), "embudo": tablas["embudo"]})
@@ -174,7 +181,7 @@ def procesar_dia(client, d):
 
 def procesar_hoy(client, hoy):
     gb_total = 0.0
-    tabla, gb = bq.correr_consulta(client, sql.consulta_hoy(ymd(hoy)))
+    tabla, gb = bq.correr_consulta(client, sql.consulta_hoy(ymd(hoy), bq.marcas_con_tabla(client, sql.PROPIEDADES, ymd(hoy))))
     gb_total += gb
     refs = {}
     # Mismo día de la semana: hace 7 días y hace 364 días (52 semanas).
@@ -184,7 +191,8 @@ def procesar_hoy(client, hoy):
         t = leer_json(r)
         if t is None:
             try:
-                t, gb = bq.correr_consulta(client, sql.consulta_hoy(ymd(d)))
+                marcas = bq.marcas_con_tabla(client, sql.PROPIEDADES, ymd(d))
+                t, gb = bq.correr_consulta(client, sql.consulta_hoy(ymd(d), marcas))
                 gb_total += gb
                 guardar_json(r, t)
             except Exception as e:  # p. ej. la tabla de ese día no existe
