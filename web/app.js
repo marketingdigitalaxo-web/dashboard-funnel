@@ -457,7 +457,7 @@ async function renderOportunidades(p, porMarca) {
     const base = new Map();
     for (const r of paginas) { const c = base.get(r.marca) || { e: 0, c: 0 }; c.e += r.entradas; c.c += r.entradas_compras; base.set(r.marca, c); }
     for (const r of paginas) {
-      if (!enMarcas(r.marca) || r.entradas < MIN.entradas) continue;
+      if (!enMarcas(r.marca) || r.entradas < MIN.entradas || ['Otra', 'Cuenta', 'Carro', 'Checkout'].includes(r.tipo)) continue;
       const m = base.get(r.marca), b = div(m.c, m.e), v = div(r.entradas_compras, r.entradas);
       if (v < b * 0.4) ops.push({ peso: r.entradas * (b - v), tag: 'Página de entrada',
         t: `${r.marca} ${r.path}: ${fmtInt.format(r.entradas)} entradas, convierte ${pct(v, 2)}`,
