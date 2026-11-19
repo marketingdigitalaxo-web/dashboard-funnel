@@ -28,9 +28,17 @@
   </nav>
 
   <section class="filters" aria-label="Filtros" id="filtros">
-    <div class="filter-field" data-f="periodo">
-      <label id="l-periodo">Período</label>
-      <div class="multiselect" id="dd-periodo"></div>
+    <div class="filter-field" data-f="desde">
+      <label id="l-desde">Semana desde</label>
+      <div class="multiselect" id="dd-desde"></div>
+    </div>
+    <div class="filter-field" data-f="hasta">
+      <label id="l-hasta">Semana hasta</label>
+      <div class="multiselect" id="dd-hasta"></div>
+    </div>
+    <div class="filter-field" data-f="comparar">
+      <label id="l-comparar">Comparar con</label>
+      <div class="multiselect" id="dd-comparar"></div>
     </div>
     <div class="filter-field" data-f="marca">
       <label id="l-marca">Marca</label>
@@ -40,13 +48,13 @@
       <label id="l-pmarca">Marca a analizar</label>
       <div class="multiselect" id="dd-pmarca"></div>
     </div>
-    <div class="filter-field" data-f="canal">
-      <label id="l-canal">Canal</label>
-      <div class="multiselect" id="dd-canal"></div>
-    </div>
     <div class="filter-field" data-f="dev">
       <label id="l-dev">Dispositivo</label>
       <div class="multiselect" id="dd-dev"></div>
+    </div>
+    <div class="filter-field" data-f="hoyref" hidden>
+      <label id="l-hoyref">Comparar hoy con</label>
+      <div class="multiselect" id="dd-hoyref"></div>
     </div>
     <label class="check" data-f="pdp" hidden><input type="checkbox" id="p-pdp" /> Mostrar PDP (fichas de producto)</label>
     <p class="filters-note" id="filtros-nota"></p>
@@ -63,6 +71,10 @@
         </div>
         <div class="table-scroll" id="tabla-embudo-marca"></div>
         <p class="legend-note"><span class="chip good">más alto</span> / <span class="chip bad">más bajo</span> = al menos 10% sobre o bajo la marca típica (mediana de las marcas)</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Marca × canal</h2><span class="sub">conversión (compras / sesiones)</span></div>
+        <div class="table-scroll" id="matriz-canal"></div>
       </div>
       <div class="card">
         <div class="card-head">
@@ -82,20 +94,9 @@
         <div id="embudo-barras"></div>
       </div>
       <div class="card">
-        <div class="card-head">
-          <h2 id="prof-titulo">Conversión según PDP vistas en la sesión</h2>
-          <div class="seg" role="group" aria-label="Tipo de página">
-            <button type="button" data-prof="PDP" aria-pressed="true">PDP</button>
-            <button type="button" data-prof="PLP" aria-pressed="false">PLP</button>
-          </div>
-        </div>
-        <div class="chart-box"><canvas id="chart-prof"></canvas></div>
-        <p class="legend-note" id="prof-nota"></p>
+        <div class="card-head"><h2>Conversión por día</h2><span class="sub">compras / sesiones</span></div>
+        <div class="chart-box"><canvas id="chart-conv-dia"></canvas></div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Conversión por día</h2><span class="sub">compras / sesiones</span></div>
-      <div class="chart-box"><canvas id="chart-conv-dia"></canvas></div>
     </div>
     <div class="card">
       <div class="card-head"><h2>Recorridos más comunes</h2><span class="sub">secuencia de tipos de página en la sesión (primeros 6 pasos)</span></div>
@@ -103,7 +104,7 @@
     </div>
     <div class="grid-2">
       <div class="card">
-        <div class="card-head"><h2>Buscador</h2><span class="sub">sesiones con compra</span></div>
+        <div class="card-head"><h2>Buscador</h2><span class="sub">conversión = compras / sesiones</span></div>
         <div class="kpi-row compact" id="kpis-busqueda"></div>
       </div>
       <div class="card">
@@ -119,14 +120,6 @@
       <div class="card-head"><h2>Resumen por canal</h2></div>
       <div class="table-scroll" id="tabla-canales"></div>
     </div>
-    <div class="card">
-      <div class="card-head"><h2>Marca × canal</h2><span class="sub">conversión (compras / sesiones)</span></div>
-      <div class="table-scroll" id="matriz-canal"></div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Detalle por fuente / medio</h2></div>
-      <div class="table-scroll tall" id="tabla-fuentes"></div>
-    </div>
   </section>
 
   <!-- ================= PÁGINAS ================= -->
@@ -138,9 +131,9 @@
         <div id="espacios-retener"></div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>Puentes hacia la compra</h2></div>
-        <p class="card-desc">Páginas desde donde mucha gente pasa a un producto o al carro. Buen lugar para inducir el cierre.</p>
-        <div id="espacios-puente"></div>
+        <div class="card-head"><h2>Productos con muchas sesiones y baja conversión</h2></div>
+        <p class="card-desc">Productos que mucha gente ve pero que convierten menos de la mitad que el promedio de la marca. Revisar precio, stock, tallas o fotos.</p>
+        <div id="productos-baja"></div>
       </div>
     </div>
     <div class="card">
@@ -148,7 +141,7 @@
         <h2>Secciones del sitio</h2>
         <span class="sub">clic en ▸ para desplegar subsecciones; clic en la ruta para ver hacia dónde va la gente</span>
       </div>
-      <p class="card-desc"><b>Entradas</b>: sesiones que comenzaron en esa página (la primera página de la visita, o "página de aterrizaje"). <b>Conv. entrada</b>: de esas sesiones, % que terminó comprando. <b>Siguen navegando</b>: % de las vistas de la página tras las cuales la persona abrió otra página.</p>
+      <p class="card-desc"><b>Entradas</b>: sesiones que comenzaron en esa página (la primera página de la visita, o "página de aterrizaje"). <b>Conv. entrada</b>: compras de esas sesiones / esas sesiones. <b>Siguen navegando</b>: % de las vistas de la página tras las cuales la persona abrió otra página.</p>
       <div class="table-scroll tall" id="tabla-paginas"></div>
     </div>
     <div class="card" id="card-transiciones" hidden>
@@ -159,11 +152,7 @@
 
   <!-- ================= PRODUCTOS ================= -->
   <section id="tab-productos" class="tab-panel" hidden>
-    <div class="card">
-      <div class="card-head"><h2>Muy vistos, poco agregados al carro</h2><span class="sub">más de 300 vistas y agregan menos de la mitad que el promedio de su marca</span></div>
-      <div class="table-scroll" id="tabla-oportunidad-prod"></div>
-    </div>
-    <div class="card">
+        <div class="card">
       <div class="card-head"><h2>Productos</h2><span class="sub">ordena por cualquier columna</span></div>
       <div class="table-scroll tall" id="tabla-productos"></div>
     </div>
@@ -177,7 +166,7 @@
       <div class="chart-box"><canvas id="chart-hoy"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-head"><h2>Por marca, hasta la última hora completa</h2><span class="sub">vs mismo día de la semana pasada, a la misma hora</span></div>
+      <div class="card-head"><h2>Por marca, hasta la última hora completa</h2><span class="sub" id="hoy-tabla-sub"></span></div>
       <div class="table-scroll" id="tabla-hoy"></div>
     </div>
   </section>

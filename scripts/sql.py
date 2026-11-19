@@ -30,6 +30,11 @@ PROPIEDADES = {
     "Lacoste": "543934765",
 }
 
+# Solo se cuenta el tráfico de estos países (nombres en inglés, como los
+# guarda GA4 en geo.country). Decisión del equipo, 19-nov-2026.
+PAISES = ("Chile", "Peru", "Argentina")
+PAISES_SQL = ", ".join(f"'{p}'" for p in PAISES)
+
 EVENTOS = (
     "session_start", "page_view", "view_item_list", "view_item",
     "add_to_cart", "begin_checkout", "purchase", "view_search_results",
@@ -56,9 +61,9 @@ def _eventos_marca(marca, prop_id, dia):
     {_param('page_location')} AS loc,
     IF(event_name = 'session_start', {_param('page_referrer')}, NULL) AS ref,
     IF(event_name = 'session_start',
-       COALESCE(collected_traffic_source.manual_source, {_param('source')}), NULL) AS src,
+       LOWER(TRIM(COALESCE(collected_traffic_source.manual_source, {_param('source')}))), NULL) AS src,
     IF(event_name = 'session_start',
-       COALESCE(collected_traffic_source.manual_medium, {_param('medium')}), NULL) AS med,
+       LOWER(TRIM(COALESCE(collected_traffic_source.manual_medium, {_param('medium')}))), NULL) AS med,
     IF(event_name = 'session_start', collected_traffic_source.gclid, NULL) AS gclid,
     IF(event_name = 'view_search_results',
        LOWER(TRIM({_param('search_term')})), NULL) AS term,
@@ -68,7 +73,8 @@ def _eventos_marca(marca, prop_id, dia):
        ARRAY(SELECT AS STRUCT item_id, item_name, quantity, item_revenue FROM UNNEST(items)),
        NULL) AS it
   FROM {_tabla(prop_id, dia)}
-  WHERE event_name IN ({', '.join(repr(e) for e in EVENTOS)})"""
+  WHERE event_name IN ({', '.join(repr(e) for e in EVENTOS)})
+    AND geo.country IN ({PAISES_SQL})"""
 
 
 # Rutas que son listados (PLP) aunque la página no envíe view_item_list.
@@ -218,32 +224,19 @@ LEFT JOIN secs USING (marca, sk)
 );
 
 -- ===== tablas resumen (en este orden) =====
+-- Conversión en todo el dashboard = compras (transacciones) / sesiones.
 
 -- embudo
 SELECT marca, canal, IFNULL(dev, 'otro') AS dev,
   COUNT(*) AS sesiones, COUNTIF(home) AS s_home, COUNTIF(plp) AS s_plp,
   COUNTIF(pdp) AS s_pdp, COUNTIF(busq) AS s_busq, COUNTIF(carro) AS s_carro,
   COUNTIF(chk) AS s_chk, COUNTIF(compro) AS s_compra,
-  COUNTIF(busq AND compro) AS s_busq_compra,
+  SUM(IF(busq, compras, 0)) AS compras_busq,
   SUM(compras) AS compras, ROUND(SUM(ingresos)) AS ingresos
 FROM ses GROUP BY 1, 2, 3;
 
--- canales_detalle
-SELECT marca, canal, src, med, COUNT(*) AS sesiones, COUNTIF(compro) AS s_compra,
-  SUM(compras) AS compras, ROUND(SUM(ingresos)) AS ingresos
-FROM ses GROUP BY 1, 2, 3, 4 HAVING sesiones >= 3;
-
--- profundidad
-SELECT marca, IFNULL(dev, 'otro') AS dev, tipo, tramo,
-  COUNT(*) AS sesiones, COUNTIF(compro) AS s_compra
-FROM ses,
-  UNNEST([STRUCT('PDP' AS tipo, n_pdp AS n), STRUCT('PLP', n_plp)]) AS x,
-  UNNEST([CASE WHEN x.n = 0 THEN '0' WHEN x.n <= 3 THEN CAST(x.n AS STRING)
-               WHEN x.n <= 5 THEN '4-5' WHEN x.n <= 10 THEN '6-10' ELSE '10+' END]) AS tramo
-GROUP BY 1, 2, 3, 4;
-
 -- recorridos
-SELECT marca, recorrido, COUNT(*) AS sesiones, COUNTIF(compro) AS s_compra,
+SELECT marca, recorrido, COUNT(*) AS sesiones, SUM(compras) AS compras,
   ROUND(SUM(ingresos)) AS ingresos
 FROM ses WHERE recorrido IS NOT NULL
 GROUP BY 1, 2
@@ -255,8 +248,7 @@ SELECT pv.marca, pv.path, ANY_VALUE(pv.tipo) AS tipo,
   COUNT(DISTINCT pv.sk) AS sesiones,
   COUNTIF(pv.n = 1) AS entradas,
   COUNTIF(pv.n = pv.total) AS salidas,
-  COUNT(DISTINCT IF(ses.compro, pv.sk, NULL)) AS s_compra,
-  COUNTIF(pv.n = 1 AND ses.compro) AS entradas_compra,
+  SUM(IF(pv.n = 1, ses.compras, 0)) AS entradas_compras,
   ROUND(SUM(IF(pv.n = 1, ses.ingresos, 0))) AS ingresos_entrada,
   COUNTIF(pv.sig_tipo = 'PDP') AS sig_pdp,
   COUNTIF(pv.sig_tipo = 'PLP') AS sig_plp,
@@ -282,22 +274,23 @@ WITH b AS (
 )
 SELECT b.marca, b.term, COUNT(*) AS sesiones,
   COUNTIF(vi.t_ult > b.t) AS s_clic_producto,
-  COUNTIF(ses.compro) AS s_compra
+  SUM(ses.compras) AS compras
 FROM b LEFT JOIN vi USING (marca, sk) JOIN ses USING (marca, sk)
 GROUP BY 1, 2 HAVING sesiones >= 2;
 
--- productos
+-- productos: sesiones que vieron el producto y transacciones que lo incluyen
 SELECT marca, i.item_id, ANY_VALUE(i.item_name) AS nombre,
   COUNTIF(ev = 'view_item') AS vistas,
+  COUNT(DISTINCT IF(ev = 'view_item', sk, NULL)) AS sesiones,
   SUM(IF(ev = 'add_to_cart', IFNULL(i.quantity, 1), 0)) AS agregados,
+  COUNT(DISTINCT IF(ev = 'purchase', IFNULL(tid, CAST(ts AS STRING)), NULL)) AS compras,
   SUM(IF(ev = 'purchase', IFNULL(i.quantity, 1), 0)) AS unidades,
   ROUND(SUM(IF(ev = 'purchase', IFNULL(i.item_revenue, 0), 0))) AS ingresos
 FROM eventos, UNNEST(it) AS i
 WHERE i.item_id IS NOT NULL
 GROUP BY 1, 2 HAVING vistas >= 3 OR unidades > 0;
 """
-    nombres = ["embudo", "canales_detalle", "profundidad", "recorridos", "paginas",
-               "transiciones", "busqueda", "productos"]
+    nombres = ["embudo", "recorridos", "paginas", "transiciones", "busqueda", "productos"]
     return sql, nombres
 
 
@@ -311,7 +304,8 @@ def consulta_hoy(dia, marcas=None):
     CONCAT(user_pseudo_id, '.', IFNULL(CAST({sid} AS STRING), 'nosid')) AS sk,
     ecommerce.purchase_revenue AS rev, ecommerce.transaction_id AS tid
   FROM {_tabla(p, dia)}
-  WHERE event_name IN ('session_start', 'page_view', 'add_to_cart', 'begin_checkout', 'purchase')"""
+  WHERE event_name IN ('session_start', 'page_view', 'add_to_cart', 'begin_checkout', 'purchase')
+    AND geo.country IN ({PAISES_SQL})"""
               for m, p in props.items()]
     return f"""
 WITH e AS ({' UNION ALL'.join(partes)}

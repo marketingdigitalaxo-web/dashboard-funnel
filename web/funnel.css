@@ -153,6 +153,7 @@ nav.tabs button { white-space: nowrap; flex: none; }
   color: var(--text-primary);
 }
 .multiselect-option.opcion-unica.is-active { color: var(--accent); font-weight: 600; }
-#dd-periodo .multiselect-btn { max-width: 280px; }
-#dd-periodo .multiselect-panel { min-width: 260px; }
+#dd-desde .multiselect-panel, #dd-hasta .multiselect-panel { min-width: 260px; max-height: 360px; overflow-y: auto; }
 .multiselect-panel > .multiselect-list:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+#dd-hoyref .multiselect-btn, #dd-comparar .multiselect-btn { min-width: 230px; }
+#dd-desde .multiselect-btn, #dd-hasta .multiselect-btn { min-width: 190px; }

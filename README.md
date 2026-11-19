@@ -27,8 +27,16 @@ Corre cada hora (minuto 17):
    día de la semana pasada.
 2. **Diario** (una vez al día, desde las 7:00 hora Chile): recalcula los
    últimos 3 días completos, por si GA4 corrigió datos recientes.
-3. **Historial**: si faltan días dentro de los últimos 90, los completa de a
-   10 por corrida.
+3. **Historial**: si se indica `historial_desde` al correrlo a mano, completa
+   los días que falten desde esa fecha, de a 30 por corrida. La carga acordada
+   es desde la W01 de 2026 (domingo 28-dic-2025) y se hace solo cuando el
+   equipo lo pida.
+
+Los datos se guardan por **semana comercial** (domingo a sábado, numerada
+como la semana ISO del lunes siguiente: la W01 de 2026 va del 28-dic-2025 al
+3-ene-2026). El embudo se guarda por día; páginas, productos, búsqueda,
+recorridos y transiciones se suman por semana y se recortan a las filas más
+relevantes de cada marca.
 
 Cada consulta tiene un tope de seguridad (`MAX_GB_DIARIO` y `MAX_GB_HOY` en
 `scripts/bq.py`): si una consulta fuera a leer más que eso, BigQuery la
@@ -39,9 +47,9 @@ rechaza sin cobrar.
 1. **Secreto**: Settings → Secrets and variables → Actions →
    `GOOGLE_SERVICE_ACCOUNT_JSON` con el JSON completo de la cuenta robot.
 2. **Pages**: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-3. **Primera corrida**: Actions → *Actualizar dashboard* → Run workflow. La
-   carga de 90 días se completa sola en las corridas siguientes (10 días por
-   corrida).
+3. **Primera corrida**: Actions → *Actualizar dashboard* → Run workflow, con
+   `historial_desde` = `2025-12-28` para cargar desde la W01 de 2026 (se
+   completa en varias corridas, de a 30 días).
 
 `Prueba de consultas` (workflow manual) corre un día de prueba sin guardar
 nada: sirve para revisar costos y cifras después de un cambio en el SQL.
@@ -49,14 +57,15 @@ nada: sirve para revisar costos y cifras después de un cambio en el SQL.
 ## Definiciones
 
 - **Sesión**: `user_pseudo_id` + `ga_session_id`.
-- **Conversión**: compras (transacciones) / sesiones.
+- **Conversión**: compras (transacciones) / sesiones, en todo el dashboard.
+- **Países**: solo se cuenta el tráfico de Chile, Perú y Argentina (`PAISES` en `scripts/sql.py`).
 - **Tipo de página** (por URL dentro de la sesión): Home = `/`; Carro =
   `/checkout/cart`; Checkout = resto de `/checkout`; Búsqueda = página con
   `view_search_results` o `/catalogsearch`; PDP = página con `view_item`;
   PLP = página con `view_item_list`; Cuenta = `/customer`, `/sales`; Otra = el resto.
 - **Pasos del embudo**: una sesión "llega al carro" si agregó algo al carro o
   vio el carro; "llega a checkout" si inició checkout o vio `/checkout`.
-- **Canal**: desde la fuente/medio del inicio de sesión. Si hay `gclid` cuenta
+- **Canal**: desde la fuente/medio del inicio de sesión, en minúsculas. Si hay `gclid` cuenta
   como Google CPC. Las auto-referencias (el propio sitio como referido) cuentan
   como Directo.
 - **Rutas**: se limpian parámetros (`?utm=...`), mayúsculas y la barra final.
@@ -75,8 +84,9 @@ nada: sirve para revisar costos y cifras después de un cambio en el SQL.
 - "Sin resultados" en el buscador no se mide directo: se aproxima como
   búsquedas tras las cuales la sesión no abrió ningún producto.
 - Las tablas grandes (páginas, productos, búsqueda, recorridos) vienen
-  resumidas para períodos fijos (7, 30 y 90 días, mes en curso, mes anterior)
-  y con un máximo de filas por marca.
+  resumidas por semana y con un máximo de filas por marca y semana (páginas
+  800, productos 600, términos 300, recorridos 80). Al sumar varias semanas,
+  una fila que no entró en el máximo de alguna semana suma de menos.
 
 ## Estructura
 
