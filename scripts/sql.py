@@ -108,13 +108,14 @@ CANAL_SQL = r"""
   END"""
 
 
-UDF_RECORRIDO = r'''-- 0) resumen del recorrido como en GA4: las repeticiones seguidas de PDP, de
---    PLP, y de los pares PLP > PDP / PDP > PLP se juntan en un paso "× n".
+UDF_RECORRIDO = r'''-- 0) resumen del recorrido como en GA4: las repeticiones seguidas de PDP, PLP,
+--    Otra y Cuenta, y de los pares PLP > PDP / PDP > PLP, se juntan en un paso "× n".
 --    Formato: pasos separados por " | ", un par como "PLP+PDP", la cantidad
 --    tras "*" (ej. "Home | PLP+PDP*3 | Carro"). Máximo 8 pasos; luego "…".
 CREATE TEMP FUNCTION comprimir_recorrido(t ARRAY<STRING>) RETURNS STRING LANGUAGE js AS r"""
   if (!t || !t.length) return null;
-  const R = new Set(['PDP', 'PLP']);
+  const R = new Set(['PDP', 'PLP', 'Otra', 'Cuenta']); // se juntan si se repiten seguidas
+  const PAR = new Set(['PDP', 'PLP']);                  // solo estas forman pares
   const out = [];
   let i = 0;
   while (i < t.length && out.length < 9) {
@@ -124,7 +125,7 @@ CREATE TEMP FUNCTION comprimir_recorrido(t ARRAY<STRING>) RETURNS STRING LANGUAG
       while (i + r < t.length && t[i + r] === a) r++;
       if (r >= 2) { out.push(a + '*' + r); i += r; continue; }
       const b = t[i + 1];
-      if (R.has(b) && b !== a) {
+      if (PAR.has(a) && PAR.has(b) && b !== a) {
         let k = 1;
         while (t[i + 2 * k] === a && t[i + 2 * k + 1] === b) k++;
         if (k >= 2) { out.push(a + '+' + b + '*' + k); i += 2 * k; continue; }
