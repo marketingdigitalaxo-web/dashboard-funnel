@@ -69,7 +69,9 @@ def _eventos_marca(marca, prop_id, dia):
        LOWER(TRIM(COALESCE(collected_traffic_source.manual_medium, {_param('medium')}))), NULL) AS med,
     IF(event_name = 'session_start', collected_traffic_source.gclid, NULL) AS gclid,
     IF(event_name = 'session_start',
-       NULLIF(LOWER(TRIM(COALESCE(collected_traffic_source.manual_campaign_name, {_param('campaign')}))), ''), NULL) AS camp,
+       -- GA4 pone "(organic)", "(referral)", "(not set)"... como campaña: no es una campaña
+       (SELECT IF(c = '' OR STARTS_WITH(c, '('), NULL, c) FROM UNNEST([
+         LOWER(TRIM(COALESCE(collected_traffic_source.manual_campaign_name, {_param('campaign')})))]) AS c), NULL) AS camp,
     {_param('engagement_time_msec', 'int')} AS eng_ms,
     COALESCE({_param('session_engaged')}, CAST({_param('session_engaged', 'int')} AS STRING)) = '1' AS engaged,
     IF(event_name = 'view_search_results',

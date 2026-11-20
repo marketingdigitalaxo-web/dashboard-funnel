@@ -637,7 +637,11 @@ async function renderRebote(p) {
   let filas;
   try {
     const ts = await Promise.all(p.ids.map((id) => reboteSemana(id)));
-    filas = sumarTabla(ts, 'rebote').filter((f) => enMarcas(f.marca) && (state.devs.size === 0 || state.devs.has(f.dev)));
+    // GA4 guarda "(organic)", "(referral)", "(not set)"... como campaña: no es una campaña.
+    const normal = (f) => (f.campana.startsWith('(') && !['(google ads sin nombre)', '(sin campaña)'].includes(f.campana)
+      ? { ...f, campana: f.canal === 'Búsqueda pagada' ? '(google ads sin nombre)' : '(sin campaña)' } : f);
+    filas = sumarTabla(ts.map((t) => ({ cols: t.cols, rows: t.rows })), 'rebote')
+      .filter((f) => enMarcas(f.marca) && (state.devs.size === 0 || state.devs.has(f.dev))).map(normal);
   } catch (e) { console.warn(e); filas = []; }
   const vacio = '<div class="empty-state">Sin datos de rebote para este período (se calcula desde la próxima actualización).</div>';
   if (!filas.length) {
