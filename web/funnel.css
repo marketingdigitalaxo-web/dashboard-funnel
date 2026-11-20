@@ -189,3 +189,15 @@ nav.tabs button { white-space: nowrap; flex: none; }
 .rec-sep-in { color: var(--text-muted); }
 .rec-mas { color: var(--text-muted); padding: 0 2px; }
 #dd-marca .multiselect-panel { min-width: 240px; }
+
+/* Rebote por origen (en validación) */
+.en-validacion {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 4px 0 14px; font-size: 12.5px; color: var(--text-secondary);
+}
+.card-head .seg { margin-left: auto; }
+table.heatmap td.cell small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; }
+td.camp-cell { max-width: 460px; }
+td.camp-cell .camp { color: var(--text-primary); }
+td.camp-cell .land { display: block; font-size: 11.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.camp-cell .mk { color: var(--text-muted); }

@@ -38,6 +38,9 @@ PAISES_SQL = ", ".join(f"'{p}'" for p in PAISES)
 EVENTOS = (
     "session_start", "page_view", "view_item_list", "view_item",
     "add_to_cart", "begin_checkout", "purchase", "view_search_results",
+    # user_engagement solo se usa para el tiempo de interacción (rebote rápido);
+    # no tiene ruta ni crea sesiones. No suma bytes: event_params ya se lee.
+    "user_engagement",
 )
 
 
@@ -58,13 +61,17 @@ def _eventos_marca(marca, prop_id, dia):
     event_timestamp AS ts,
     CONCAT(user_pseudo_id, '.', IFNULL(CAST({sid} AS STRING), 'nosid')) AS sk,
     device.category AS dev,
-    {_param('page_location')} AS loc,
+    IF(event_name = 'user_engagement', NULL, {_param('page_location')}) AS loc,
     IF(event_name = 'session_start', {_param('page_referrer')}, NULL) AS ref,
     IF(event_name = 'session_start',
        LOWER(TRIM(COALESCE(collected_traffic_source.manual_source, {_param('source')}))), NULL) AS src,
     IF(event_name = 'session_start',
        LOWER(TRIM(COALESCE(collected_traffic_source.manual_medium, {_param('medium')}))), NULL) AS med,
     IF(event_name = 'session_start', collected_traffic_source.gclid, NULL) AS gclid,
+    IF(event_name = 'session_start',
+       NULLIF(LOWER(TRIM(COALESCE(collected_traffic_source.manual_campaign_name, {_param('campaign')}))), ''), NULL) AS camp,
+    {_param('engagement_time_msec', 'int')} AS eng_ms,
+    COALESCE({_param('session_engaged')}, CAST({_param('session_engaged', 'int')} AS STRING)) = '1' AS engaged,
     IF(event_name = 'view_search_results',
        LOWER(TRIM({_param('search_term')})), NULL) AS term,
     IF(event_name = 'purchase', ecommerce.purchase_revenue, NULL) AS rev,
@@ -199,7 +206,7 @@ SELECT * EXCEPT (gclid, host), {CANAL_SQL} AS canal FROM (
 WITH
   inicio AS (
     SELECT marca, sk,
-      ARRAY_AGG(STRUCT(src, med, gclid, host) ORDER BY ts LIMIT 1)[OFFSET(0)] AS s
+      ARRAY_AGG(STRUCT(src, med, gclid, host, camp) ORDER BY ts LIMIT 1)[OFFSET(0)] AS s
     FROM eventos WHERE ev = 'session_start' GROUP BY marca, sk
   ),
   evs AS (
@@ -209,8 +216,11 @@ WITH
       LOGICAL_OR(ev = 'begin_checkout') AS bc,
       LOGICAL_OR(ev = 'view_search_results') AS busco,
       COUNT(DISTINCT IF(ev = 'purchase', IFNULL(tid, CAST(ts AS STRING)), NULL)) AS compras,
-      IFNULL(SUM(rev), 0) AS ingresos
+      IFNULL(SUM(rev), 0) AS ingresos,
+      -- interactuó (criterio GA4): sesión marcada como "engaged" o 10 s o más
+      LOGICAL_OR(IFNULL(engaged, FALSE)) OR IFNULL(SUM(eng_ms), 0) >= 10000 AS interactuo
     FROM eventos GROUP BY marca, sk
+    HAVING LOGICAL_OR(ev != 'user_engagement')
   ),
   pags AS (
     SELECT marca, sk,
@@ -227,6 +237,8 @@ WITH
   secs AS (
     SELECT marca, sk,
       ANY_VALUE(IF(n = 1, path, NULL)) AS entrada,
+      ANY_VALUE(IF(n = 1, tipo, NULL)) AS tipo_entrada,
+      COUNT(DISTINCT path) AS n_paginas,
       comprimir_recorrido(ARRAY_AGG(IF(recarga, NULL, tipo) IGNORE NULLS ORDER BY n LIMIT 60)) AS recorrido
     FROM pv GROUP BY marca, sk
   )
@@ -236,6 +248,10 @@ SELECT
   IF(inicio.s.gclid IS NOT NULL, 'cpc', IFNULL(inicio.s.med, '(none)')) AS med,
   inicio.s.gclid AS gclid,
   inicio.s.host AS host,
+  CASE WHEN inicio.s.camp IS NOT NULL THEN inicio.s.camp
+       WHEN inicio.s.gclid IS NOT NULL THEN '(google ads sin nombre)'
+       ELSE '(sin campaña)' END AS campana,
+  evs.interactuo,
   IFNULL(pags.home, FALSE) AS home,
   IFNULL(pags.plp, FALSE) AS plp,
   IFNULL(pags.pdp, FALSE) AS pdp,
@@ -247,6 +263,8 @@ SELECT
   IFNULL(pags.n_pdp, 0) AS n_pdp,
   IFNULL(pags.n_plp, 0) AS n_plp,
   secs.entrada,
+  secs.tipo_entrada,
+  IFNULL(secs.n_paginas, 0) AS n_paginas,
   secs.recorrido
 FROM evs
 LEFT JOIN inicio USING (marca, sk)
@@ -320,8 +338,27 @@ SELECT marca, i.item_id, ANY_VALUE(i.item_name) AS nombre,
 FROM eventos, UNNEST(it) AS i
 WHERE i.item_id IS NOT NULL
 GROUP BY 1, 2 HAVING vistas >= 3 OR unidades > 0;
+
+-- rebote: sesiones por origen (canal y campaña) y página de entrada.
+-- Rebote = la sesión vio una sola página. Rebote rápido = además no
+-- interactuó (menos de 10 s, criterio de GA4). Las combinaciones con menos de
+-- 3 sesiones en el día se juntan en la entrada "(otras)", así los totales
+-- por canal y tipo de página quedan exactos.
+WITH b AS (
+  SELECT marca, canal, campana, entrada, tipo_entrada AS tipo, IFNULL(dev, 'otro') AS dev,
+    COUNT(*) AS sesiones,
+    COUNTIF(n_paginas = 1) AS rebotes,
+    COUNTIF(n_paginas = 1 AND NOT interactuo) AS rebotes_rapidos,
+    SUM(compras) AS compras, ROUND(SUM(ingresos)) AS ingresos
+  FROM ses WHERE entrada IS NOT NULL
+  GROUP BY 1, 2, 3, 4, 5, 6
+)
+SELECT marca, canal, campana, IF(sesiones >= 3, entrada, '(otras)') AS entrada, tipo, dev,
+  SUM(sesiones) AS sesiones, SUM(rebotes) AS rebotes, SUM(rebotes_rapidos) AS rebotes_rapidos,
+  SUM(compras) AS compras, SUM(ingresos) AS ingresos
+FROM b GROUP BY 1, 2, 3, 4, 5, 6;
 """
-    nombres = ["embudo", "recorridos", "paginas", "transiciones", "busqueda", "productos"]
+    nombres = ["embudo", "recorridos", "paginas", "transiciones", "busqueda", "productos", "rebote"]
     return sql, nombres
 
 

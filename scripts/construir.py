@@ -9,6 +9,8 @@ carpeta de datos (store).
 - semana/AAAA-Www.json: páginas, productos, búsqueda y recorridos de la
   semana; semana/AAAA-Www-trans.json: hacia dónde va la gente desde cada
   página (se carga solo al pedirlo).
+- semana/AAAA-Www-rebote.json: rebote por canal, campaña y página de
+  entrada (se carga solo en la pestaña Canales).
 - hoy.json: pulso por hora del día en curso con sus referencias.
 """
 
@@ -62,8 +64,10 @@ def main():
         s = leer(r)
         sid = s["semana"]
         trans = s.pop("transiciones", None)
+        rebote = s.pop("rebote", None)
         escribir(f"semana/{sid}.json", s)
         escribir(f"semana/{sid}-trans.json", trans or {"cols": [], "rows": []})
+        escribir(f"semana/{sid}-rebote.json", rebote or {"cols": [], "rows": []})
         dom, sab = semanas.rango(sid)
         dias_embudo = [f for f in fechas if dom.isoformat() <= f <= sab.isoformat()]
         lista.append({"id": sid, "desde": dom.isoformat(), "hasta": sab.isoformat(),

@@ -120,6 +120,31 @@
       <div class="card-head"><h2>Resumen por canal</h2></div>
       <div class="table-scroll" id="tabla-canales"></div>
     </div>
+
+    <div class="en-validacion">
+      <span class="chip warn">En validación</span>
+      <span>Rebote por origen: sección nueva, a validar con el equipo para la próxima versión del dashboard. Las reglas y umbrales pueden cambiar.</span>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Rebote por canal y tipo de página de aterrizaje</h2>
+        <div class="seg" role="group" aria-label="Métrica de rebote" id="seg-rebote">
+          <button type="button" data-m="rr" aria-pressed="true">Rebote rápido (&lt;10 s)</button>
+          <button type="button" data-m="r" aria-pressed="false">Rebote</button>
+        </div>
+      </div>
+      <p class="card-desc"><b>Rebote</b>: la sesión vio una sola página. <b>Rebote rápido</b>: además se fue sin interactuar (menos de 10 segundos, criterio de GA4). Color más intenso = más rebote; debajo, sesiones que entraron por ese tipo de página.</p>
+      <div class="table-scroll" id="matriz-rebote"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Campañas y sus páginas de aterrizaje</h2><span class="sub">ordena por cualquier columna; por defecto, sesiones perdidas</span></div>
+      <p class="card-desc"><b>Sesiones perdidas</b>: sesiones que rebotaron. <b>Lectura</b>: regla automática con rebote rápido, solo con 300 sesiones o más (ver el detalle al pasar el mouse).</p>
+      <div class="table-scroll tall" id="tabla-campanas"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Oportunidades de rebote</h2><span class="sub">las de mayor impacto en sesiones perdidas</span></div>
+      <div id="oportunidades-rebote"></div>
+    </div>
   </section>
 
   <!-- ================= PÁGINAS ================= -->

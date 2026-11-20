@@ -64,6 +64,10 @@ RECORTE = {
     "recorridos": (["marca", "recorrido"], [], 80, "sesiones"),
 }
 TRANS_PAGINAS, TRANS_DESTINOS = 300, 6
+# Rebote por origen: filas (canal x campaña x entrada x dispositivo) que se
+# guardan por marca y semana; el resto se junta en la entrada "(otras)".
+REBOTE_FILAS = 1500
+REBOTE_CLAVE = ["marca", "canal", "campana", "entrada", "tipo", "dev"]
 
 
 def ahora():
@@ -133,6 +137,38 @@ def recortar(tabla, limite, orden):
     return {"cols": cols, "rows": filas}
 
 
+def recortar_rebote(tabla):
+    """Deja las REBOTE_FILAS combinaciones con más sesiones de cada marca y
+    junta el resto en la entrada "(otras)" (sin perder sesiones)."""
+    if tabla is None:
+        return None
+    cols = tabla["cols"]
+    im, ie, io = cols.index("marca"), cols.index("entrada"), cols.index("sesiones")
+    ik = [cols.index(c) for c in REBOTE_CLAVE]
+    isum = [i for i in range(len(cols)) if i not in ik]
+    por_marca = defaultdict(list)
+    for r in tabla["rows"]:
+        por_marca[r[im]].append(r)
+    filas = []
+    for rs in por_marca.values():
+        rs.sort(key=lambda r: -(r[io] or 0))
+        resto = {}
+        for n, r in enumerate(rs):
+            if n < REBOTE_FILAS and r[ie] != "(otras)":
+                filas.append(r)
+                continue
+            r = list(r)
+            r[ie] = "(otras)"
+            k = tuple(r[i] for i in ik)
+            if k in resto:
+                for i in isum:
+                    resto[k][i] += r[i] or 0
+            else:
+                resto[k] = r
+        filas.extend(resto.values())
+    return {"cols": cols, "rows": filas}
+
+
 def armar_semana(sid):
     """Suma los días guardados de la semana y deja el archivo semanal."""
     dom, sab = semanas.rango(sid)
@@ -158,6 +194,7 @@ def armar_semana(sid):
         rs.sort(key=lambda r: -r[3])
         filas.extend(rs[:TRANS_DESTINOS])
     salida["transiciones"] = {"cols": ["marca", "path", "sig_path", "n"], "rows": filas}
+    salida["rebote"] = recortar_rebote(sumar([x["tablas"].get("rebote") for x in datos], REBOTE_CLAVE, []))
     guardar_json(ruta("semanas", f"{sid}.json.gz"), salida)
 
 

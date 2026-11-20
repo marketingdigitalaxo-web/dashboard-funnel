@@ -98,3 +98,18 @@ scripts/actualizar.py  qué se consulta en cada corrida
 scripts/construir.py   arma los archivos que lee el dashboard
 .github/workflows/     el robot (cada hora) y la prueba manual
 ```
+
+## Rebote por origen (en validación, próxima versión)
+
+En la pestaña Canales, debajo del resumen por canal. Tabla diaria `rebote`:
+marca × canal × campaña × página de entrada × dispositivo, con sesiones,
+rebotes (vio una sola página), rebotes rápidos (además sin interacción: menos
+de 10 s, criterio GA4), compras e ingresos. Campaña = utm_campaign; Google Ads
+con autoetiquetado sin nombre queda como "(google ads sin nombre)".
+
+Reglas de "Lectura" (rebote rápido, misma marca y período, mín. 300 sesiones
+en la fila y 200 en la referencia): 1) desajuste anuncio-página (+15 pts vs la
+misma página desde otros orígenes); 2) revisar audiencia (+15 pts vs mediana
+de campañas del canal, en la mayoría de sus páginas); 3) revisar página (+15
+pts vs mediana de su tipo); 4) carro vacío al llegar (carro con rebote > 40%).
+Sección y umbrales a validar con el equipo.

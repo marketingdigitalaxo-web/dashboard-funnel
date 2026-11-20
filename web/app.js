@@ -37,10 +37,11 @@ const CLAVES = {
   busqueda: [['marca', 'term'], []],
   recorridos: [['marca', 'recorrido'], []],
   transiciones: [['marca', 'path', 'sig_path'], []],
+  rebote: [['marca', 'canal', 'campana', 'entrada', 'tipo', 'dev'], []],
 };
 
 const state = {
-  meta: null, embudo: [], hoy: null, semanas: {}, trans: {},
+  meta: null, embudo: [], hoy: null, semanas: {}, trans: {}, rebote: {}, rebMetrica: 'rr',
   semDesde: null, semHasta: null, comparar: 'anterior',
   marcas: new Set(), devs: new Set(),
   tab: 'resumen', pMarca: null, pPDP: false, abiertos: new Set(), hoyRef: 'semana',
@@ -117,6 +118,10 @@ async function semana(id) {
 async function transSemana(id) {
   if (!state.trans[id]) state.trans[id] = getJSON(`semana/${id}-trans.json`);
   return state.trans[id];
+}
+async function reboteSemana(id) {
+  if (!state.rebote[id]) state.rebote[id] = getJSON(`semana/${id}-rebote.json`).catch(() => ({ cols: [], rows: [] }));
+  return state.rebote[id];
 }
 // Suma una tabla grande sobre varias semanas.
 function sumarTabla(tablas, nombre) {
@@ -601,6 +606,154 @@ function renderCanales(p) {
     filas: act,
     totales: { key: 'Total', ...tot },
   });
+  renderRebote(p);
+}
+
+/* ---------- REBOTE POR ORIGEN (en validación, próxima versión) ----------
+   Reglas de la columna "Lectura" (se aplica la primera que se cumpla), con
+   rebote rápido y comparando siempre dentro de la misma marca y período:
+   1. Desajuste anuncio-página: la campaña en esa página rebota >= 15 pts
+      más que la misma página desde otros orígenes.
+   2. Revisar audiencia: la campaña rebota >= 15 pts sobre la mediana de las
+      campañas de su canal, y pasa en la mayoría de sus páginas.
+   3. Revisar página: la página rebota >= 15 pts sobre la mediana de su tipo.
+   4. Carro vacío al llegar: entra al carro y rebota (total) más de 40%.
+   Volumen mínimo: 300 sesiones en la fila y 200 en el grupo de comparación. */
+const REB = { minFila: 300, minRef: 200, minPagCamp: 50, puntos: 0.15, carro: 0.40, filasTabla: 200 };
+const TIPOS_REB = ['Home', 'PLP', 'PDP', 'Búsqueda', 'Carro', 'Otra'];
+const CAMPOS_REB = ['sesiones', 'rebotes', 'rebotes_rapidos', 'compras', 'ingresos'];
+const rr = (x) => div(x.rebotes_rapidos, x.sesiones);
+const rt = (x) => div(x.rebotes, x.sesiones);
+const SIN_NOMBRE = (c) => c.startsWith('(');
+function mediana(xs) {
+  xs = xs.filter(isFinite).sort((a, b) => a - b);
+  if (!xs.length) return NaN;
+  const m = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+}
+const pts = (x) => (x >= 0 ? '+' : '') + Math.round(x * 100) + ' pts';
+
+async function renderRebote(p) {
+  let filas;
+  try {
+    const ts = await Promise.all(p.ids.map((id) => reboteSemana(id)));
+    filas = sumarTabla(ts, 'rebote').filter((f) => enMarcas(f.marca) && (state.devs.size === 0 || state.devs.has(f.dev)));
+  } catch (e) { console.warn(e); filas = []; }
+  const vacio = '<div class="empty-state">Sin datos de rebote para este período (se calcula desde la próxima actualización).</div>';
+  if (!filas.length) {
+    ['matriz-rebote', 'tabla-campanas', 'oportunidades-rebote'].forEach((id) => { document.getElementById(id).innerHTML = vacio; });
+    return;
+  }
+
+  // 1) Matriz canal x tipo de página de entrada
+  const met = state.rebMetrica === 'rr' ? rr : rt;
+  const canales = agruparPor(filas, 'canal', ['sesiones']).sort((a, b) => b.sesiones - a.sesiones).map((x) => x.key);
+  const celdas = new Map(agruparPor(filas, (f) => f.canal + '|' + f.tipo, CAMPOS_REB).map((x) => [x.key, x]));
+  const [lo, hi] = state.rebMetrica === 'rr' ? [0.08, 0.62] : [0.25, 0.8];
+  const fondo = (v) => `rgba(217, 89, 38, ${(0.08 + Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * 0.72).toFixed(2)})`;
+  document.getElementById('matriz-rebote').innerHTML = `<table class="data heatmap"><thead><tr><th>Canal</th>${TIPOS_REB.map((t) => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>${canales.map((c) => `<tr><td>${esc(c)}</td>${TIPOS_REB.map((t) => {
+    const x = celdas.get(c + '|' + t);
+    if (!x || x.sesiones < 100) return `<td class="cell empty" title="menos de 100 sesiones">${x ? '·' : ''}</td>`;
+    return `<td class="cell" style="background:${fondo(met(x))}" title="${esc(c)} → ${esc(t)}: ${fmtInt.format(x.sesiones)} sesiones · rebote ${pct(rt(x), 0)} · rebote rápido ${pct(rr(x), 0)} · conv. ${pct(conv(x), 2)}">${pct(met(x), 0)}<small>${fmtInt.format(x.sesiones)}</small></td>`;
+  }).join('')}</tr>`).join('')}</tbody></table>
+    <p class="legend-note">Celdas con menos de 100 sesiones quedan en gris. "Otra" incluye páginas informativas y de servicio.</p>`;
+  document.querySelectorAll('#seg-rebote button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.m === state.rebMetrica));
+    b.onclick = () => { state.rebMetrica = b.dataset.m; renderRebote(p); };
+  });
+
+  // 2) Campaña x página de entrada (sin dispositivo), con sus referencias
+  const k = (f, ...c) => c.map((x) => f[x]).join('\u0001');
+  const filasCE = agruparPor(filas.filter((f) => f.entrada !== '(otras)'), (f) => k(f, 'marca', 'canal', 'campana', 'entrada', 'tipo'), CAMPOS_REB)
+    .map((x) => { const [marca, canal, campana, entrada, tipo] = x.key.split('\u0001'); return { ...x, marca, canal, campana, entrada, tipo }; });
+  const porPagina = new Map(agruparPor(filasCE, (f) => k(f, 'marca', 'entrada'), CAMPOS_REB).map((x) => [x.key, x]));
+  const porCamp = agruparPor(filasCE, (f) => k(f, 'marca', 'canal', 'campana'), CAMPOS_REB);
+  const campIdx = new Map(porCamp.map((x) => [x.key, x]));
+  // mediana de campañas por marca y canal (solo campañas con nombre y volumen)
+  const medCanal = new Map();
+  for (const c of porCamp) {
+    const [marca, canal, campana] = c.key.split('\u0001');
+    if (SIN_NOMBRE(campana) || c.sesiones < REB.minFila) continue;
+    const kk = marca + '\u0001' + canal;
+    if (!medCanal.has(kk)) medCanal.set(kk, []);
+    medCanal.get(kk).push(rr(c));
+  }
+  for (const [kk, xs] of medCanal) medCanal.set(kk, xs.length >= 3 ? mediana(xs) : NaN);
+  // mediana de páginas por marca y tipo
+  const tipoPag = new Map(filasCE.map((f) => [k(f, 'marca', 'entrada'), f.tipo]));
+  const medTipo = new Map();
+  for (const [kk, x] of porPagina) {
+    if (x.sesiones < REB.minFila) continue;
+    const kt = kk.split('\u0001')[0] + '\u0001' + tipoPag.get(kk);
+    if (!medTipo.has(kt)) medTipo.set(kt, []);
+    medTipo.get(kt).push(rr(x));
+  }
+  for (const [kk, xs] of medTipo) medTipo.set(kk, xs.length >= 3 ? mediana(xs) : NaN);
+  // páginas de cada campaña, para ver si el rebote alto se repite
+  const paginasCamp = new Map();
+  for (const f of filasCE) {
+    if (f.sesiones < REB.minPagCamp) continue;
+    const kc = k(f, 'marca', 'canal', 'campana');
+    if (!paginasCamp.has(kc)) paginasCamp.set(kc, []);
+    paginasCamp.get(kc).push(f);
+  }
+
+  const leer = (f) => {
+    if (f.sesiones < REB.minFila) return null;
+    const pag = porPagina.get(k(f, 'marca', 'entrada'));
+    const otros = { sesiones: pag.sesiones - f.sesiones, rebotes_rapidos: pag.rebotes_rapidos - f.rebotes_rapidos };
+    if (otros.sesiones >= REB.minRef && rr(f) - rr(otros) >= REB.puntos) {
+      return { n: 1, chip: 'bad', t: 'Desajuste anuncio-página', ref: rr(otros),
+        d: `rebote rápido ${pct(rr(f), 0)} vs ${pct(rr(otros), 0)} de la misma página desde otros orígenes (${pts(rr(f) - rr(otros))})` };
+    }
+    const kc = k(f, 'marca', 'canal', 'campana');
+    const mc = medCanal.get(f.marca + '\u0001' + f.canal);
+    const camp = campIdx.get(kc);
+    if (!SIN_NOMBRE(f.campana) && isFinite(mc) && camp.sesiones >= REB.minFila && rr(camp) - mc >= REB.puntos) {
+      const pags = paginasCamp.get(kc) || [];
+      const altas = pags.filter((x) => rr(x) - mc >= REB.puntos).length;
+      if (pags.length && altas > pags.length / 2) {
+        return { n: 2, chip: 'warn', t: 'Revisar audiencia', ref: mc,
+          d: `la campaña rebota ${pct(rr(camp), 0)} (rápido) vs ${pct(mc, 0)} de la campaña típica de ${f.canal}; alto en ${altas} de ${pags.length} páginas` };
+      }
+    }
+    const mt = medTipo.get(f.marca + '\u0001' + f.tipo);
+    if (pag.sesiones >= REB.minFila && isFinite(mt) && rr(pag) - mt >= REB.puntos) {
+      return { n: 3, chip: 'warn', t: 'Revisar página', ref: mt,
+        d: `la página rebota ${pct(rr(pag), 0)} (rápido) desde todos los orígenes vs ${pct(mt, 0)} de las páginas ${f.tipo} típicas de la marca` };
+    }
+    if (f.tipo === 'Carro' && rt(f) > REB.carro) {
+      return { n: 4, chip: 'warn', t: 'Carro vacío al llegar', ref: REB.carro,
+        d: `${pct(rt(f), 0)} entra al carro y se va sin ver otra página; revisar si el link llega con los productos` };
+    }
+    return { n: 5, chip: 'good', t: 'Dentro de lo normal', d: 'ninguna regla se cumple' };
+  };
+  const varias = new Set(filasCE.map((f) => f.marca)).size > 1;
+  const lista = filasCE.map((f) => ({ ...f, lect: leer(f) })).sort((a, b) => b.rebotes - a.rebotes).slice(0, REB.filasTabla);
+  tabla(document.getElementById('tabla-campanas'), {
+    id: 'campanas', defecto: { i: 6, dir: -1 },
+    cols: [
+      { h: 'Canal', txt: true, v: (f) => f.canal },
+      { h: 'Campaña › aterrizaje', txt: true, v: (f) => f.campana, cls: () => 'camp-cell',
+        html: (f) => `<span class="camp">${varias ? `<span class="mk">${esc(f.marca)} · </span>` : ''}${esc(f.campana)}</span><span class="land" title="${esc(f.entrada)}">${esc(f.entrada)} · ${esc(f.tipo)}</span>` },
+      { h: 'Sesiones', v: (f) => f.sesiones, f: fInt },
+      { h: 'Rebote', v: rt, f: (x) => pct(x, 0) },
+      { h: 'Rebote rápido', v: rr, f: (x) => pct(x, 0) },
+      { h: 'Conv.', v: conv, f: (x) => pct(x, 2) },
+      { h: 'Sesiones perdidas', v: (f) => f.rebotes, f: fInt },
+      { h: 'Lectura', txt: true, v: (f) => (f.lect ? f.lect.n : 9),
+        html: (f) => (f.lect ? `<span class="chip ${f.lect.chip}" title="${esc(f.lect.d)}">${esc(f.lect.t)}</span>` : '<span class="chip muted" title="menos de 300 sesiones">Poco volumen</span>') },
+    ],
+    filas: lista,
+  });
+
+  // 3) Oportunidades: filas con regla 1 a 4, por sesiones perdidas "de más"
+  const ops = filasCE.map((f) => ({ f, l: leer(f) })).filter((x) => x.l && x.l.n <= 4)
+    .map((x) => ({ ...x, peso: x.l.n === 4 ? x.f.rebotes : x.f.sesiones * Math.max(0, rr(x.f) - x.l.ref) }))
+    .sort((a, b) => b.peso - a.peso).slice(0, 8);
+  document.getElementById('oportunidades-rebote').innerHTML = ops.length
+    ? ops.map(({ f, l }) => `<div class="opp${l.n === 1 ? ' alta' : ''}"><div class="t"><span class="tag">${esc(l.t)}</span>${esc(f.marca)} · ${esc(f.canal)} · ${esc(f.campana)} → ${esc(f.entrada)}</div><div class="d">${esc(l.d)} · ${fmtInt.format(f.sesiones)} sesiones</div></div>`).join('')
+    : '<div class="empty-state">Sin oportunidades que superen los volúmenes mínimos.</div>';
 }
 
 /* ---------- PÁGINAS Y SECCIONES ---------- */
